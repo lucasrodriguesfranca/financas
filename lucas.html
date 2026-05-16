@@ -311,6 +311,8 @@ function getMesAnteriorKey(){
   const prev=new Date(h.getFullYear(),h.getMonth()-1,1);
   return`${prev.getFullYear()}-${String(prev.getMonth()+1).padStart(2,'0')}-01`;
 }
+function getMesAnteriorDoFiltroKey(){if(state.period==='mes'){const prev=new Date(state.filters.ano,state.filters.mes-2,1);return`${prev.getFullYear()}-${String(prev.getMonth()+1).padStart(2,'0')}-01`;}return getMesAnteriorKey();}
+
 
 function getFaturaCartao(cartaoNome){
   // Always uses previous month — that's what's due on day 05 of current month
@@ -358,7 +360,7 @@ function getSaldoProjetado(saldoConta){
   const hoje=new Date();
   const todayStr=hoje.toISOString().split('T')[0];
   const mesStr=getMesAtualKey();
-  const cartoes=['Cartão Itaú 1207','Cartão Virtual Itaú 8422','Cartão Santander'];
+  const cartoes=['Cartão Itaú','Cartão Virtual Itaú'];
 
   // Parcelas futuras do mês atual
   const parcelasFuturas=state.movs
@@ -427,8 +429,8 @@ function iniciarApp(){
 
   Promise.race([Promise.all([lM,lC,lK,lCfg]),timeout]).then(()=>showPage('dashboard'));
 }
-function getDefaultCats(){return{"Receita":["13o","Bônus","Consultoria financeira","Férias","Presente","Reembolso","Salário","Outros"],"Investimento":["Aposentadoria","Poupança","XP","Outros"],"Conta":["Água","Aluguel","Clube","Condomínio","Contador","Diarista","Energia elétrica","Financiamento","Gás","Gastos pessoais","Internet","IPTU","Plano de saúde","Seguro de vida","Simples Nacional","Streaming","Telefone","Outros"],"Alimentação":["Açougue","Delivery","Hortifruti","Lanche","Padaria","Restaurante","Supermercado","Outros"],"Casa":["Jardim","Lavanderia","Manutenção","Material de limpeza","Móvel / Decoração","Outros"],"Diversão":["Bar","Bebida","Cinema","Comida","Festa","Outros"],"Educação":["Curso","Inglês","Livro","Material","Outros"],"Estética":["Cabeleireiro","Cosmético","Depilação","Limpeza de pele","Manicure","Maquiagem","Procedimento","Produto de higiene","Outros"],"Pessoal":["Acessório","Costura","Doação","Presente","Roupa","Saque","Outros"],"Reembolso":[],"Saúde":["Academia","Dentista","Farmácia","Fisioterapia","Inscrição em prova","Massagem","Médico","Nutricionista","Personal","Racha","Suplemento","Terapia","Outros"],"Transporte":["Combustível","Estacionamento","IPVA","Lava jato","Manutenção","Multa","Seguro","Sem Parar","Táxi / Uber","Outros"],"Viagem":["Bar / Restaurante","Bebida","Combustível","Comida","Estacionamento","Farmácia","Festa","Hospedagem","Outros","Passagem","Pedágio","Pessoal","Táxi / Uber"],"Bibi":["Alimentação","Equipamento","Farmácia","Fralda","Obra","Quarto","Roupa","Saúde","Viagem","Outros"]};}
-function getDefaultCartoes(){return["Cartão Itaú 1207","Cartão Virtual Itaú 8422","Cartão Santander","Débito","Dinheiro","Pix"];}
+function getDefaultCats(){return{"Receita":["13o","Bônus","Consultoria financeira","Férias","Presente","Reembolso","Salário","Outros"],"Investimento":["Aposentadoria","Poupança","XP","Outros"],"Conta":["Água","Aluguel","Clube","Condomínio","Contador","Diarista","Energia elétrica","Financiamento","Gás","Gastos pessoais","Internet","IPTU","Latam Pass","Plano de saúde","Seguro de vida","Simples Nacional","Streaming","Telefone","Tokyo Studio","Outros"],"Alimentação":["Açougue","Delivery","Hortifruti","Lanche","Padaria","Restaurante","Supermercado","Outros"],"Casa":["Jardim","Lavanderia","Manutenção","Material de limpeza","Móvel / Decoração","Outros"],"Diversão":["Bar","Bebida","Cinema","Comida","Festa","Outros"],"Educação":["Curso","Inglês","Livro","Material","Outros"],"Estética":["Cabeleireiro","Cosmético","Depilação","Limpeza de pele","Manicure","Maquiagem","Procedimento","Produto de higiene","Outros"],"Pessoal":["Acessório","Aposta","Costura","Doação","Presente","Roupa","Saque","Outros"],"Reembolso":[],"Saúde":["Academia","Dentista","Farmácia","Fisioterapia","Inscrição em prova","Massagem","Médico","Nutricionista","Personal","Racha","Suplemento","Terapia","Outros"],"Transporte":["Combustível","Estacionamento","IPVA","Lava jato","Manutenção","Multa","Seguro","Sem Parar","Táxi / Uber","Outros"],"Viagem":["Bar / Restaurante","Bebida","Combustível","Comida","Estacionamento","Farmácia","Festa","Hospedagem","Outros","Passagem","Pedágio","Pessoal","Táxi / Uber"],"Bibi":["Alimentação","Equipamento","Farmácia","Fralda","Obra","Quarto","Roupa","Saúde","Viagem","Outros"]};}
+function getDefaultCartoes(){return["Pix","Cartão Itaú","Cartão Virtual Itaú","Débito","Dinheiro"];}
 function getPagamentoOpts(selected){return getDefaultCartoes().map(c=>`<option ${c===selected?'selected':''}>${c}</option>`).join('');}
 
 // ===== NAVIGATION =====
@@ -476,8 +478,8 @@ function renderDashboard(el){
   const allMBase=(state.showReembolso?state.movs:state.movs.filter(m=>!isReemb(m)))
     .filter(m=>(m['Mês/Ano']||'')>='2026-01-01'&&(m.Data||'')<=todaySaldo);
 
-  const cartoes=['Cartão Itaú 1207','Cartão Virtual Itaú 8422','Cartão Santander'];
-  const mesAntKey=getMesAnteriorKey();
+  const cartoes=['Cartão Itaú','Cartão Virtual Itaú'];
+  const mesAntKey=getMesAnteriorDoFiltroKey();
 
   // Desconta fatura do mês anterior apenas se marcada como paga
   const faturasPagasDesconto=cartoes.reduce((total,cartao)=>{
@@ -498,7 +500,7 @@ function renderDashboard(el){
   // Fatura do cartão: SEMPRE bruta (ignora toggle reembolso), apenas despesas do período filtrado no cartão Itaú
   // Usa o mesmo filtro de período mas sem excluir reembolsos
   const filteredBruto=getFilteredMovs(true); // true = forçar incluir reembolsos
-  const cartaoItauNomes=['Cartão Itaú 1207','Cartão Virtual Itaú 8422'];
+  const cartaoItauNomes=['Cartão Itaú','Cartão Virtual Itaú'];
   const faturaCartao=filteredBruto
     .filter(m=>m['Receita/Despesa']==='Despesa'&&cartaoItauNomes.includes(m['Forma de Pagamento']))
     .reduce((s,m)=>s+safeNum(m.Valor),0);
@@ -607,7 +609,7 @@ function renderDashboard(el){
         <div class="section-header"><h3>Gastos por Forma de Pagamento</h3></div>
         <div class="section-body" style="padding:12px 14px">
           ${(()=>{
-            const pgColors={'Cartão Itaú 1207':'#f97316','Cartão Virtual Itaú 8422':'#fb923c','Cartão Santander':'#ef4444','Débito':'#60a5fa','Pix':'#34d399','Dinheiro':'#a78bfa','Outros':'#888898'};
+            const pgColors={'Cartão Itaú':'#f97316','Cartão Virtual Itaú':'#fb923c','Débito':'#60a5fa','Pix':'#34d399','Dinheiro':'#a78bfa','Outros':'#888898'};
 
             // Filtrado (respeita toggle reembolso) — para análise
             const pgMap={};
@@ -618,7 +620,7 @@ function renderDashboard(el){
             // Bruto por cartão (ignora toggle — para conciliar com fatura)
             const pgBruto={};
             filteredBruto.filter(m=>m['Receita/Despesa']==='Despesa').forEach(m=>{const pg=m['Forma de Pagamento']||'Outros';pgBruto[pg]=(pgBruto[pg]||0)+safeNum(m.Valor);});
-            const cartoes=['Cartão Itaú 1207','Cartão Virtual Itaú 8422','Cartão Santander'];
+            const cartoes=['Cartão Itaú','Cartão Virtual Itaú'];
             const totalBrutoCartoes=cartoes.reduce((s,c)=>s+(pgBruto[c]||0),0);
 
             return pgSorted.length===0?'<div style="color:var(--muted);font-size:12px">Sem dados no período</div>':
@@ -676,12 +678,12 @@ function renderDashboard(el){
       </div>
 
       <div class="section" style="margin-bottom:0;margin-top:14px">
-        <div class="section-header"><h3>Faturas do Mês</h3><span style="font-size:10px;color:var(--muted)">referente a ${formatMesLabel(getMesAnteriorKey())} · clique para marcar como paga</span></div>
+        <div class="section-header"><h3>Fatura do mês anterior</h3><span style="font-size:10px;color:var(--muted);margin-left:auto">ref à ${formatMesLabel(mesAntKey)}</span></div>
         <div class="section-body" style="padding:10px 12px;display:flex;flex-direction:column;gap:7px">
-          ${['Cartão Itaú 1207','Cartão Virtual Itaú 8422','Cartão Santander'].map(cartao=>{
+          ${['Cartão Itaú','Cartão Virtual Itaú'].map(cartao=>{
             const valor=getFaturaCartao(cartao);
             const pago=isFaturaPaga(cartao, getMesAnteriorKey());
-            const pgColors={'Cartão Itaú 1207':'#f97316','Cartão Virtual Itaú 8422':'#fb923c','Cartão Santander':'#ef4444'};
+            const pgColors={'Cartão Itaú':'#f97316','Cartão Virtual Itaú':'#fb923c'};
             return`<div class="semaforo-item">
               <div class="semaforo-dot ${pago?'verde':'amarelo'}"></div>
               <div style="flex:1">
@@ -689,7 +691,7 @@ function renderDashboard(el){
                 <div style="font-size:10px;color:var(--muted)">${pago?'Fatura paga':'A pagar (dia 05)'}</div>
               </div>
               <div style="font-family:var(--font-mono);font-size:12px;color:${pago?'var(--muted)':'var(--red)'};text-decoration:${pago?'line-through':'none'};margin-right:8px">${fmt(valor)}</div>
-              <button onclick="toggleFaturaPaga('${cartao.replace(/'/g,"\\'")}','${getMesAnteriorKey()}')"
+              <button onclick="toggleFaturaPaga('${cartao.replace(/'/g,"\\'")}','${mesAntKey}')"
                 style="background:${pago?'rgba(61,214,140,.2)':'rgba(249,106,106,.1)'};border:1px solid ${pago?'rgba(61,214,140,.4)':'rgba(249,106,106,.3)'};color:${pago?'var(--green)':'var(--red)'};border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer;white-space:nowrap">
                 ${pago?'✓ Paga':'Marcar paga'}
               </button>
@@ -1413,7 +1415,7 @@ function renderImportar(el){
         <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
           <div class="form-group">
             <label>Forma de pagamento padrão</label>
-            <select id="imp-cartao">${getPagamentoOpts('Cartão Itaú 1207')}</select>
+            <select id="imp-cartao">${getPagamentoOpts('Cartão Itaú')}</select>
           </div>
           <div class="form-group">
             <label>Arquivo CSV</label>
@@ -1645,7 +1647,7 @@ function impBuildRow(r,i,catKeys){
   const descVal=(r.descEditada!==undefined?r.descEditada:(r.descBase||r.desc)).replace(/"/g,'&quot;');
   const dataVal=r.dataEditada||r.data;
   const valorVal=r.valorEditado!==undefined?r.valorEditado:r.valor;
-  const cartaoAtual=r.formaPag||window._impCartao||'Cartão Itaú 1207';
+  const cartaoAtual=r.formaPag||window._impCartao||'Cartão Itaú';
   const catDataOpts=catKeys.join('|');
   const subDataOpts=(r.cat?sortSubs(state.cats[r.cat]||[]):[]).join('|');
 
@@ -1784,7 +1786,7 @@ function impToggleParc(i,checked){window._impRows[i].isParc=checked;}
 function impSetParcNum(i,num){window._impRows[i].parcTotal=num;}
 
 function impSalvar(){
-  const cartaoPadrao=window._impCartao||'Cartão Itaú 1207';
+  const cartaoPadrao=window._impCartao||'Cartão Itaú';
   const aprovados=window._impRows.filter(r=>r.incluir&&r.cat);
   const semCategoria=window._impRows.filter(r=>r.incluir&&!r.cat);
 

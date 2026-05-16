@@ -226,6 +226,7 @@ function getFilteredMovs(forceReembolso){
 function getLastDate(){const sorted=[...state.movs].filter(m=>m.Data&&m['À Vista / Parcelado']!=='Parcelado').sort((a,b)=>b.Data.localeCompare(a.Data));return sorted[0]?.Data?sorted[0].Data.split('-').reverse().join('/'):'—';}
 function getMesAtualKey(){const h=new Date();return`${h.getFullYear()}-${String(h.getMonth()+1).padStart(2,'0')}-01`;}
 function getMesAnteriorKey(){const h=new Date();const prev=new Date(h.getFullYear(),h.getMonth()-1,1);return`${prev.getFullYear()}-${String(prev.getMonth()+1).padStart(2,'0')}-01`;}
+function getMesAnteriorDoFiltroKey(){if(state.period==='mes'){const prev=new Date(state.filters.ano,state.filters.mes-2,1);return`${prev.getFullYear()}-${String(prev.getMonth()+1).padStart(2,'0')}-01`;}return getMesAnteriorKey();}
 function getFaturaCartao(cartaoNome){const mesAnt=getMesAnteriorKey();return state.movs.filter(m=>m['Mês/Ano']===mesAnt&&m['Receita/Despesa']==='Despesa'&&m['Forma de Pagamento']===cartaoNome).reduce((s,m)=>s+safeNum(m.Valor),0);}
 function isFaturaPaga(cartaoNome,mesKey){return!!(state.faturasPagas[mesKey]?.[cartaoNome]);}
 function isContaFixaPaga(nomeConta,mesKey){return state.contasFixasPagas[mesKey]?.[nomeConta]===true;}
@@ -266,20 +267,20 @@ function getDefaultCats(){
   return{
     "Receita":["13o","Bônus","Consultoria financeira","Dividendos","Férias","Presente","Reembolso","Salário","Outros"],
     "Investimento":["Poupança","Tokyo Studio","XP","Outros"],
-    "Conta":["Água","Aluguel","Clube","Condomínio","Contador","Diarista","Energia elétrica","Financiamento","Gás","Gastos pessoais","INSS","Internet","IPTU","Plano de saúde","Seguro de vida","Simples Nacional","Streaming","Telefone","Outros"],
+    "Conta":["Água","Aluguel","Clube","Condomínio","Contador","Diarista","Energia elétrica","Financiamento","Gás","Gastos pessoais","INSS","Internet","IPTU","Latam Pass","Plano de saúde","Seguro de vida","Simples Nacional","Streaming","Telefone","Tokyo Studio","Outros"],
     "Alimentação":["Açougue","Delivery","Hortifruti","Lanche","Padaria","Restaurante","Supermercado","Outros"],
     "Casa":["Jardim","Lavanderia","Manutenção","Material de limpeza","Móvel / Decoração","Outros"],
     "Diversão":["Bar","Bebida","Cinema","Comida","Festa","Outros"],
     "Educação":["Curso","Inglês","Livro","Material","Outros"],
     "Estética":["Cabeleireiro","Cosmético","Depilação","Limpeza de pele","Manicure","Maquiagem","Procedimento","Produto de higiene","Outros"],
-    "Pessoal":["Acessório","Costura","Doação","Presente","Roupa","Sapato","Saque","Outros"],
+    "Pessoal":["Acessório","Aposta","Costura","Doação","Presente","Roupa","Sapato","Saque","Outros"],
     "Reembolso":[],
     "Saúde":["Academia","Dentista","Farmácia","Fisioterapia","Inscrição em prova","Massagem","Médico","Nutricionista","Personal","Suplemento","Terapia","Outros"],
     "Transporte":["Combustível","Estacionamento","IPVA","Lava jato","Manutenção","Multa","Seguro","Sem Parar","Táxi / Uber","Outros"],
     "Viagem":["Bar / Restaurante","Bebida","Combustível","Comida","Estacionamento","Farmácia","Festa","Hospedagem","Passagem","Pedágio","Pessoal","Táxi / Uber","Outros"]
   };
 }
-function getDefaultCartoes(){return["Cartão Itaú","Cartão Virtual Itaú","Cartão Santander","Débito","Dinheiro","Pix"];}
+function getDefaultCartoes(){return["Pix","Cartão Itaú","Cartão Virtual Itaú","Cartão Santander","Débito","Dinheiro"];}
 function getPagamentoOpts(selected){return getDefaultCartoes().map(c=>`<option ${c===selected?'selected':''}>${c}</option>`).join('');}
 
 // ===== NAVIGATION =====
@@ -324,7 +325,7 @@ function renderDashboard(el){
   const todaySaldo=new Date().toISOString().split('T')[0];
   const allMBase=(state.showReembolso?state.movs:state.movs.filter(m=>!isReemb(m))).filter(m=>(m['Mês/Ano']||'')>='2026-01-01'&&(m.Data||'')<=todaySaldo);
   const cartoes=['Cartão Itaú','Cartão Virtual Itaú','Cartão Santander'];
-  const mesAntKey=getMesAnteriorKey();
+  const mesAntKey=getMesAnteriorDoFiltroKey();
 
   const faturasPagasDesconto=cartoes.reduce((total,cartao)=>{
     if(!isFaturaPaga(cartao,mesAntKey))return total;
@@ -443,7 +444,7 @@ function renderDashboard(el){
       </div>
 
       <div class="section" style="margin-bottom:0;margin-top:14px">
-        <div class="section-header"><h3>Faturas do Mês</h3><span style="font-size:10px;color:var(--muted)">referente a ${formatMesLabel(getMesAnteriorKey())} · clique para marcar como paga</span></div>
+        <div class="section-header"><h3>Fatura do mês anterior</h3><span style="font-size:10px;color:var(--muted);margin-left:auto">ref à ${formatMesLabel(mesAntKey)}</span></div>
         <div class="section-body" style="padding:10px 12px;display:flex;flex-direction:column;gap:7px">
           ${cartoes.map(cartao=>{
             const valor=getFaturaCartao(cartao);const pago=isFaturaPaga(cartao,getMesAnteriorKey());
@@ -451,7 +452,7 @@ function renderDashboard(el){
               <div class="semaforo-dot ${pago?'verde':'amarelo'}"></div>
               <div style="flex:1"><div style="font-size:12px;color:${pgColors[cartao]}">${cartao}</div><div style="font-size:10px;color:var(--muted)">${pago?'Fatura paga':'A pagar (dia 05)'}</div></div>
               <div style="font-family:var(--font-mono);font-size:12px;color:${pago?'var(--muted)':'var(--red)'};text-decoration:${pago?'line-through':'none'};margin-right:8px">${fmt(valor)}</div>
-              <button onclick="toggleFaturaPaga('${cartao.replace(/'/g,"\\'")}','${getMesAnteriorKey()}')" style="background:${pago?'rgba(61,214,140,.2)':'rgba(249,106,106,.1)'};border:1px solid ${pago?'rgba(61,214,140,.4)':'rgba(249,106,106,.3)'};color:${pago?'var(--green)':'var(--red)'};border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer;white-space:nowrap">${pago?'✓ Paga':'Marcar paga'}</button>
+              <button onclick="toggleFaturaPaga('${cartao.replace(/'/g,"\\'")}','${mesAntKey}')" style="background:${pago?'rgba(61,214,140,.2)':'rgba(249,106,106,.1)'};border:1px solid ${pago?'rgba(61,214,140,.4)':'rgba(249,106,106,.3)'};color:${pago?'var(--green)':'var(--red)'};border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer;white-space:nowrap">${pago?'✓ Paga':'Marcar paga'}</button>
             </div>`;
           }).join('')}
         </div>
@@ -524,7 +525,8 @@ function openModal(title,html){document.getElementById('modal-title').textConten
 function closeModal(){document.getElementById('modal-overlay').classList.remove('open');}
 function openAjusteSaldo(){openModal('Ajuste de Saldo em Conta',`<p style="color:var(--muted);font-size:13px;margin-bottom:16px">Positivo adiciona, negativo desconta do saldo calculado pelas movimentações.</p><div class="form-group" style="margin-bottom:18px"><label>Valor do ajuste</label><input type="number" id="ajuste-val" value="${state.ajusteSaldo}" step="0.01" style="width:200px"></div><div class="form-actions"><button class="btn btn-primary" onclick="salvarAjusteSaldo()">Salvar</button><button class="btn btn-secondary" onclick="closeModal()">Cancelar</button></div>`);}
 function salvarAjusteSaldo(){state.ajusteSaldo=parseFloat(document.getElementById('ajuste-val').value)||0;salvarConfiguracoes();closeModal();refreshDashboard();showToast('Saldo ajustado!','success');}
-function openContasFixas(){openModal('Contas Fixas',`<table style="width:100%;margin-bottom:14px"><thead><tr><th>Nome</th><th>Valor</th><th>Dia Venc.</th><th></th></tr></thead><tbody>${state.contasFixas.map((cf,i)=>`<tr><td><input type="text" value="${cf.nome}" onchange="state.contasFixas[${i}].nome=this.value" style="width:140px"></td><td><input type="number" value="${cf.valor}" onchange="state.contasFixas[${i}].valor=+this.value" style="width:80px"></td><td><input type="number" value="${cf.diaVenc}" onchange="state.contasFixas[${i}].diaVenc=+this.value" style="width:55px"></td><td><button class="btn-icon" onclick="state.contasFixas.splice(${i},1);openContasFixas()">🗑️</button></td></tr>`).join('')}</tbody></table><div class="form-actions"><button class="btn btn-secondary btn-sm" onclick="state.contasFixas.push({nome:'Nova',valor:0,diaVenc:10});openContasFixas()">+ Add</button><button class="btn btn-primary" onclick="salvarContasFixas()">Salvar</button><button class="btn btn-secondary" onclick="closeModal()">Cancelar</button></div>`);}
+function moverContaFixa(i,dir){const a=state.contasFixas;const j=i+dir;if(j<0||j>=a.length)return;[a[i],a[j]]=[a[j],a[i]];openContasFixas();}
+function openContasFixas(){openModal('Contas Fixas',`<table style="width:100%;margin-bottom:14px"><thead><tr><th>Nome</th><th>Valor</th><th>Dia Venc.</th><th>Ordem</th><th></th></tr></thead><tbody>${state.contasFixas.map((cf,i)=>`<tr><td><input type="text" value="${cf.nome}" onchange="state.contasFixas[${i}].nome=this.value" style="width:140px"></td><td><input type="number" value="${cf.valor}" onchange="state.contasFixas[${i}].valor=+this.value" style="width:80px"></td><td><input type="number" value="${cf.diaVenc}" onchange="state.contasFixas[${i}].diaVenc=+this.value" style="width:55px"></td><td style="white-space:nowrap"><button class="btn-icon" onclick="moverContaFixa(${i},-1)" ${i===0?'disabled':''}>↑</button><button class="btn-icon" onclick="moverContaFixa(${i},1)" ${i===state.contasFixas.length-1?'disabled':''}>↓</button></td><td><button class="btn-icon" onclick="state.contasFixas.splice(${i},1);openContasFixas()">🗑️</button></td></tr>`).join('')}</tbody></table><div class="form-actions"><button class="btn btn-secondary btn-sm" onclick="state.contasFixas.push({nome:'Nova',valor:0,diaVenc:10});openContasFixas()">+ Add</button><button class="btn btn-primary" onclick="salvarContasFixas()">Salvar</button><button class="btn btn-secondary" onclick="closeModal()">Cancelar</button></div>`);}
 function salvarContasFixas(){salvarConfiguracoes();closeModal();refreshDashboard();showToast('Salvo!','success');}
 
 // ===== AUTOCOMPLETE =====
