@@ -1925,86 +1925,58 @@ function exportarDados(){
 
 // ===== CONFIGURAÇÕES DE CATEGORIAS =====
 function renderConfiguracoes(el){
-  el.innerHTML='<div class="page-header"><div><h2>Configurações</h2><p>Gerencie categorias e subcategorias</p></div><button class="btn btn-primary" onclick="salvarCategorias()">💾 Salvar categorias</button></div><div class="section"><div class="section-header"><h3>Categorias e Subcategorias</h3><button class="btn btn-secondary btn-sm" onclick="addCategoria()">+ Nova categoria</button></div><div class="section-body" style="padding:0" id="cats-body">'+renderCatsBody()+'</div></div>';
+  el.innerHTML = '<div class="page-header"><div><h2>Configurações</h2><p>Gerencie categorias e subcategorias</p></div>'
+    + '<button class="btn btn-primary" onclick="salvarCategorias()">💾 Salvar categorias</button></div>'
+    + '<div class="section"><div class="section-header"><h3>Categorias e Subcategorias</h3>'
+    + '<button class="btn btn-secondary btn-sm" onclick="addCategoria()">+ Nova categoria</button></div>'
+    + '<div class="section-body" style="padding:0" id="cats-body">' + renderCatsBody() + '</div></div>';
 }
 
 function renderCatsBody(){
-  const cats=state.cats;
-  const catKeys=sortedCatKeys(cats);
-  return catKeys.map(function(cat){
-    const color=catColor(cat);
-    const catSafe=cat.replace(/'/g,"\'");
-    const subs=(cats[cat]||[]).map(function(sub,i){
-      const subSafe=sub.replace(/'/g,"\'");
-      const w=Math.max(60,sub.length*8);
+  const cats = state.cats;
+  const catKeys = sortedCatKeys(cats);
+  return catKeys.map(function(cat, ci){
+    const color = catColor(cat);
+    const subs = (cats[cat]||[]).map(function(sub, si){
+      const w = Math.max(60, sub.length * 8);
       return '<div style="display:flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:3px 6px">'
-        +'<input type="text" value="'+sub.replace(/"/g,'&quot;')+'" style="font-size:12px;width:'+w+'px;background:transparent;border:none;color:var(--text);outline:none"'
-        +' onchange="renomearSub(''+catSafe+'','+i+',this.value)">'
-        +'<button style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:0 2px" onclick="removerSub(''+catSafe+'','+i+')">✕</button>'
-        +'</div>';
+        + '<input type="text" value="' + sub.replace(/"/g,'&quot;') + '" data-ci="' + ci + '" data-si="' + si + '"'
+        + ' style="font-size:12px;width:' + w + 'px;background:transparent;border:none;color:var(--text);outline:none"'
+        + ' onchange="cfgRenameSub(this)">'
+        + '<button style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:0 2px"'
+        + ' data-ci="' + ci + '" data-si="' + si + '" onclick="cfgRemoveSub(this)">✕</button>'
+        + '</div>';
     }).join('');
     return '<div style="border-bottom:1px solid var(--border);padding:12px 16px">'
-      +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">'
-      +'<div style="width:8px;height:8px;border-radius:50%;background:'+color+';flex-shrink:0"></div>'
-      +'<input type="text" value="'+cat.replace(/"/g,'&quot;')+'" style="font-weight:600;font-size:13px;width:180px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:var(--text);padding:4px 8px"'
-      +' onchange="renomearCategoria(''+catSafe+'',this.value)">'
-      +'<button class="btn-icon" style="color:var(--red)" onclick="removerCategoria(''+catSafe+'')">🗑️</button>'
-      +'<button class="btn btn-secondary btn-sm" onclick="addSubcategoria(''+catSafe+'')">+ Sub</button>'
-      +'</div>'
-      +'<div style="display:flex;flex-wrap:wrap;gap:6px;padding-left:18px">'+subs+'</div>'
-      +'</div>';
+      + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">'
+      + '<div style="width:8px;height:8px;border-radius:50%;background:' + color + ';flex-shrink:0"></div>'
+      + '<input type="text" value="' + cat.replace(/"/g,'&quot;') + '" data-ci="' + ci + '"'
+      + ' style="font-weight:600;font-size:13px;width:180px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:var(--text);padding:4px 8px"'
+      + ' onchange="cfgRenameCat(this)">'
+      + '<button class="btn-icon" style="color:var(--red)" data-ci="' + ci + '" onclick="cfgRemoveCat(this)">🗑️</button>'
+      + '<button class="btn btn-secondary btn-sm" data-ci="' + ci + '" onclick="cfgAddSub(this)">+ Sub</button>'
+      + '</div>'
+      + '<div style="display:flex;flex-wrap:wrap;gap:6px;padding-left:18px">' + subs + '</div>'
+      + '</div>';
   }).join('');
 }
 
-function addCategoria(){
-  const nome=prompt('Nome da nova categoria:');
-  if(!nome||!nome.trim())return;
-  if(state.cats[nome.trim()]){showToast('Categoria já existe','error');return;}
-  state.cats[nome.trim()]=[];
-  document.getElementById('cats-body').innerHTML=renderCatsBody();
-}
+function cfgGetKeys(){return sortedCatKeys(state.cats);}
+function cfgRenameCat(el){const keys=cfgGetKeys();const old=keys[+el.dataset.ci];const novo=el.value.trim();if(!novo||novo===old)return;if(state.cats[novo]){showToast('Já existe','error');el.value=old;return;}const subs=state.cats[old];delete state.cats[old];state.cats[novo]=subs;document.getElementById('cats-body').innerHTML=renderCatsBody();}
+function cfgRemoveCat(el){const keys=cfgGetKeys();const cat=keys[+el.dataset.ci];if(!confirm('Remover "'+cat+'" e todas as subcategorias?'))return;delete state.cats[cat];document.getElementById('cats-body').innerHTML=renderCatsBody();}
+function cfgAddSub(el){const keys=cfgGetKeys();const cat=keys[+el.dataset.ci];const nome=prompt('Nova subcategoria em "'+cat+'":');if(!nome||!nome.trim())return;if(!state.cats[cat])state.cats[cat]=[];state.cats[cat].push(nome.trim());document.getElementById('cats-body').innerHTML=renderCatsBody();}
+function cfgRenameSub(el){const keys=cfgGetKeys();const cat=keys[+el.dataset.ci];state.cats[cat][+el.dataset.si]=el.value.trim();}
+function cfgRemoveSub(el){const keys=cfgGetKeys();const cat=keys[+el.dataset.ci];state.cats[cat].splice(+el.dataset.si,1);document.getElementById('cats-body').innerHTML=renderCatsBody();}
 
-function removerCategoria(cat){
-  if(!confirm(\`Remover a categoria "\${cat}" e todas as suas subcategorias?\`))return;
-  delete state.cats[cat];
-  document.getElementById('cats-body').innerHTML=renderCatsBody();
-}
+function addCategoria(){const nome=prompt('Nome da nova categoria:');if(!nome||!nome.trim())return;if(state.cats[nome.trim()]){showToast('Categoria já existe','error');return;}state.cats[nome.trim()]=[];document.getElementById('cats-body').innerHTML=renderCatsBody();}
+function removerCategoria(cat){if(!confirm('Remover "'+cat+'"?'))return;delete state.cats[cat];document.getElementById('cats-body').innerHTML=renderCatsBody();}
+function renomearCategoria(catAntiga,catNova){catNova=catNova.trim();if(!catNova||catNova===catAntiga)return;if(state.cats[catNova]){showToast('Já existe','error');return;}const subs=state.cats[catAntiga];delete state.cats[catAntiga];state.cats[catNova]=subs;document.getElementById('cats-body').innerHTML=renderCatsBody();}
+function addSubcategoria(cat){const nome=prompt('Nova subcategoria em "'+cat+'":');if(!nome||!nome.trim())return;if(!state.cats[cat])state.cats[cat]=[];if(state.cats[cat].includes(nome.trim())){showToast('Já existe','error');return;}state.cats[cat].push(nome.trim());document.getElementById('cats-body').innerHTML=renderCatsBody();}
+function removerSub(cat,idx){state.cats[cat].splice(idx,1);document.getElementById('cats-body').innerHTML=renderCatsBody();}
+function renomearSub(cat,idx,novoNome){novoNome=novoNome.trim();if(!novoNome)return;state.cats[cat][idx]=novoNome;}
+function salvarCategorias(){apiPost('salvarConfiguracoes',{categorias:JSON.stringify(state.cats)}).then(function(){showToast('Categorias salvas!','success');}).catch(function(){showToast('Erro ao salvar','error');});}
 
-function renomearCategoria(catAntiga,catNova){
-  catNova=catNova.trim();
-  if(!catNova||catNova===catAntiga)return;
-  if(state.cats[catNova]){showToast('Já existe uma categoria com esse nome','error');return;}
-  const subs=state.cats[catAntiga];
-  delete state.cats[catAntiga];
-  state.cats[catNova]=subs;
-  document.getElementById('cats-body').innerHTML=renderCatsBody();
-}
 
-function addSubcategoria(cat){
-  const nome=prompt(\`Nova subcategoria em "\${cat}":\`);
-  if(!nome||!nome.trim())return;
-  if(!state.cats[cat])state.cats[cat]=[];
-  if(state.cats[cat].includes(nome.trim())){showToast('Subcategoria já existe','error');return;}
-  state.cats[cat].push(nome.trim());
-  document.getElementById('cats-body').innerHTML=renderCatsBody();
-}
-
-function removerSub(cat,idx){
-  state.cats[cat].splice(idx,1);
-  document.getElementById('cats-body').innerHTML=renderCatsBody();
-}
-
-function renomearSub(cat,idx,novoNome){
-  novoNome=novoNome.trim();
-  if(!novoNome)return;
-  state.cats[cat][idx]=novoNome;
-}
-
-function salvarCategorias(){
-  apiPost('salvarConfiguracoes',{categorias:JSON.stringify(state.cats)})
-    .then(()=>showToast('Categorias salvas!','success'))
-    .catch(()=>showToast('Erro ao salvar','error'));
-}
 
 function showToast(msg,type){const t=document.getElementById('toast');t.textContent=msg;t.className=`toast show ${type}`;setTimeout(()=>t.className='toast',3000);}
 
