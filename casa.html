@@ -894,43 +894,35 @@ function deletarMov(idx){if(!confirm('Deletar este lançamento?'))return;apiGet(
 
 // ===== CONFIGURAÇÕES DE CATEGORIAS =====
 function renderConfiguracoes(el){
-  const cats=state.cats;
-  const catKeys=sortedCatKeys(cats);
-  el.innerHTML=`
-    <div class="page-header"><div><h2>Configurações</h2><p>Gerencie categorias e subcategorias</p></div>
-      <button class="btn btn-primary" onclick="salvarCategorias()">💾 Salvar categorias</button>
-    </div>
-    <div class="section">
-      <div class="section-header"><h3>Categorias e Subcategorias</h3>
-        <button class="btn btn-secondary btn-sm" onclick="addCategoria()">+ Nova categoria</button>
-      </div>
-      <div class="section-body" style="padding:0" id="cats-body">
-        ${renderCatsBody()}
-      </div>
-    </div>`;
+  el.innerHTML='<div class="page-header"><div><h2>Configurações</h2><p>Gerencie categorias e subcategorias</p></div><button class="btn btn-primary" onclick="salvarCategorias()">💾 Salvar categorias</button></div><div class="section"><div class="section-header"><h3>Categorias e Subcategorias</h3><button class="btn btn-secondary btn-sm" onclick="addCategoria()">+ Nova categoria</button></div><div class="section-body" style="padding:0" id="cats-body">'+renderCatsBody()+'</div></div>';
 }
 
 function renderCatsBody(){
   const cats=state.cats;
   const catKeys=sortedCatKeys(cats);
-  return catKeys.map(cat=>`
-    <div style="border-bottom:1px solid var(--border);padding:12px 16px">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-        <div style="width:8px;height:8px;border-radius:50%;background:${catColor(cat)};flex-shrink:0"></div>
-        <input type="text" value="${cat}" style="font-weight:600;font-size:13px;width:180px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:var(--text);padding:4px 8px"
-          onchange="renomearCategoria('${cat.replace(/'/g,"\\'")}',this.value)">
-        <button class="btn-icon" style="color:var(--red)" onclick="removerCategoria('${cat.replace(/'/g,"\\'")}')">🗑️</button>
-        <button class="btn btn-secondary btn-sm" onclick="addSubcategoria('${cat.replace(/'/g,"\\'")}')">+ Sub</button>
-      </div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px;padding-left:18px">
-        ${(cats[cat]||[]).map((sub,i)=>`
-          <div style="display:flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:3px 6px">
-            <input type="text" value="${sub}" style="font-size:12px;width:${Math.max(60,sub.length*8)}px;background:transparent;border:none;color:var(--text);outline:none"
-              onchange="renomearSub('${cat.replace(/'/g,"\\'")}',${i},this.value)">
-            <button style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:0 2px" onclick="removerSub('${cat.replace(/'/g,"\\'")}',${i})">✕</button>
-          </div>`).join('')}
-      </div>
-    </div>`).join('');
+  return catKeys.map(function(cat){
+    const color=catColor(cat);
+    const catSafe=cat.replace(/'/g,"\'");
+    const subs=(cats[cat]||[]).map(function(sub,i){
+      const subSafe=sub.replace(/'/g,"\'");
+      const w=Math.max(60,sub.length*8);
+      return '<div style="display:flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:3px 6px">'
+        +'<input type="text" value="'+sub.replace(/"/g,'&quot;')+'" style="font-size:12px;width:'+w+'px;background:transparent;border:none;color:var(--text);outline:none"'
+        +' onchange="renomearSub(''+catSafe+'','+i+',this.value)">'
+        +'<button style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:0 2px" onclick="removerSub(''+catSafe+'','+i+')">✕</button>'
+        +'</div>';
+    }).join('');
+    return '<div style="border-bottom:1px solid var(--border);padding:12px 16px">'
+      +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">'
+      +'<div style="width:8px;height:8px;border-radius:50%;background:'+color+';flex-shrink:0"></div>'
+      +'<input type="text" value="'+cat.replace(/"/g,'&quot;')+'" style="font-weight:600;font-size:13px;width:180px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:var(--text);padding:4px 8px"'
+      +' onchange="renomearCategoria(''+catSafe+'',this.value)">'
+      +'<button class="btn-icon" style="color:var(--red)" onclick="removerCategoria(''+catSafe+'')">🗑️</button>'
+      +'<button class="btn btn-secondary btn-sm" onclick="addSubcategoria(''+catSafe+'')">+ Sub</button>'
+      +'</div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:6px;padding-left:18px">'+subs+'</div>'
+      +'</div>';
+  }).join('');
 }
 
 function addCategoria(){
