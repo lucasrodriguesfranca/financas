@@ -134,6 +134,9 @@ tbody td{padding:7px 10px;}
     <div class="nav-item" onclick="showPage('importar')" id="nav-importar">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Importar Fatura
     </div>
+    <div class="nav-item" onclick="showPage('configuracoes')" id="nav-configuracoes">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Configurações
+    </div>
   </div>
   <div class="main" id="main-content">
     <div class="loading">
@@ -227,7 +230,8 @@ function getLastDate(){const sorted=[...state.movs].filter(m=>m.Data&&m['À Vist
 function getMesAtualKey(){const h=new Date();return`${h.getFullYear()}-${String(h.getMonth()+1).padStart(2,'0')}-01`;}
 function getMesAnteriorKey(){const h=new Date();const prev=new Date(h.getFullYear(),h.getMonth()-1,1);return`${prev.getFullYear()}-${String(prev.getMonth()+1).padStart(2,'0')}-01`;}
 function getMesAnteriorDoFiltroKey(){if(state.period==='mes'){const prev=new Date(state.filters.ano,state.filters.mes-2,1);return`${prev.getFullYear()}-${String(prev.getMonth()+1).padStart(2,'0')}-01`;}return getMesAnteriorKey();}
-function getFaturaCartao(cartaoNome){const mesAnt=getMesAnteriorKey();return state.movs.filter(m=>m['Mês/Ano']===mesAnt&&m['Receita/Despesa']==='Despesa'&&m['Forma de Pagamento']===cartaoNome).reduce((s,m)=>s+safeNum(m.Valor),0);}
+
+function getFaturaCartao(cartaoNome,mesKey){return state.movs.filter(m=>m['Mês/Ano']===mesKey&&m['Receita/Despesa']==='Despesa'&&m['Forma de Pagamento']===cartaoNome).reduce((s,m)=>s+safeNum(m.Valor),0);}
 function isFaturaPaga(cartaoNome,mesKey){return!!(state.faturasPagas[mesKey]?.[cartaoNome]);}
 function isContaFixaPaga(nomeConta,mesKey){return state.contasFixasPagas[mesKey]?.[nomeConta]===true;}
 function toggleFaturaPaga(cartaoNome,mesKey){if(!state.faturasPagas[mesKey])state.faturasPagas[mesKey]={};state.faturasPagas[mesKey][cartaoNome]=!state.faturasPagas[mesKey][cartaoNome];salvarConfiguracoes();refreshDashboard();}
@@ -259,7 +263,8 @@ function iniciarApp(){
   const lM=apiGet('getMovimentacoes').then(d=>{try{state.movs=(d||[]).map(row=>({'Data':row.a||'','Categoria':row.b||'','Sub Categoria':row.c||'','Descrição':row.d||'','Valor':safeNum(row.e),'Forma de Pagamento':row.f||'','À Vista / Parcelado':row.g||'','Mês/Ano':row.h||'','Receita/Despesa':row.i||''}));}catch(e){state.movs=[];}}).catch(()=>{state.movs=[];});
   const lC=apiGet('getCategorias').then(d=>{try{state.cats=d||getDefaultCats();}catch(e){state.cats=getDefaultCats();}}).catch(()=>{state.cats=getDefaultCats();});
   const lK=apiGet('getCartoes').then(d=>{try{state.cartoes=d||getDefaultCartoes();}catch(e){state.cartoes=getDefaultCartoes();}}).catch(()=>{state.cartoes=getDefaultCartoes();});
-  const lCfg=apiGet('getConfiguracoes').then(cfg=>{try{if(cfg){if(cfg.ajusteSaldo!==undefined)state.ajusteSaldo=parseFloat(cfg.ajusteSaldo)||0;if(cfg.contasFixas)state.contasFixas=JSON.parse(cfg.contasFixas);if(cfg.faturasPagas)state.faturasPagas=JSON.parse(cfg.faturasPagas);if(cfg.contasFixasPagas)state.contasFixasPagas=JSON.parse(cfg.contasFixasPagas);}}catch(e){}}).catch(()=>{});
+  const lCfg=apiGet('getConfiguracoes').then(cfg=>{try{if(cfg){if(cfg.ajusteSaldo!==undefined)state.ajusteSaldo=parseFloat(cfg.ajusteSaldo)||0;if(cfg.contasFixas)state.contasFixas=JSON.parse(cfg.contasFixas);if(cfg.faturasPagas)state.faturasPagas=JSON.parse(cfg.faturasPagas);if(cfg.contasFixasPagas)state.contasFixasPagas=JSON.parse(cfg.contasFixasPagas);
+        if(cfg.categorias){try{const c=JSON.parse(cfg.categorias);if(c&&Object.keys(c).length>0)state.cats=c;}catch(e){}}}}catch(e){}}).catch(()=>{});
   Promise.race([Promise.all([lM,lC,lK,lCfg]),timeout]).then(()=>showPage('dashboard'));
 }
 
@@ -294,6 +299,7 @@ function showPage(page){
   else if(page==='movimentacoes')renderMovimentacoes(main);
   else if(page==='analise')renderAnalise(main);
   else if(page==='importar')renderImportar(main);
+  else if(page==='configuracoes')renderConfiguracoes(main);
 }
 
 // ===== PERIOD BAR =====
@@ -447,7 +453,7 @@ function renderDashboard(el){
         <div class="section-header"><h3>Fatura do mês anterior</h3><span style="font-size:10px;color:var(--muted);margin-left:auto">ref à ${formatMesLabel(mesAntKey)}</span></div>
         <div class="section-body" style="padding:10px 12px;display:flex;flex-direction:column;gap:7px">
           ${cartoes.map(cartao=>{
-            const valor=getFaturaCartao(cartao);const pago=isFaturaPaga(cartao,getMesAnteriorKey());
+            const valor=getFaturaCartao(cartao,mesAntKey);const pago=isFaturaPaga(cartao,mesAntKey);
             return`<div class="semaforo-item">
               <div class="semaforo-dot ${pago?'verde':'amarelo'}"></div>
               <div style="flex:1"><div style="font-size:12px;color:${pgColors[cartao]}">${cartao}</div><div style="font-size:10px;color:var(--muted)">${pago?'Fatura paga':'A pagar (dia 05)'}</div></div>
@@ -885,6 +891,98 @@ function salvarEdicao(idx){
   apiPostRaw('editarLancamento',{index:idx,data:l}).then(res=>{if(res.success){state.movs[idx]={...l};closeModal();showToast('Atualizado!','success');if(state.currentPage==='movimentacoes')renderMovimentacoes(document.getElementById('main-content'));}}).catch(()=>showToast('Erro ao salvar','error'));
 }
 function deletarMov(idx){if(!confirm('Deletar este lançamento?'))return;apiGet('deletarLancamento',{index:idx}).then(res=>{if(res.success){state.movs.splice(idx,1);showToast('Deletado!','success');renderMovimentacoes(document.getElementById('main-content'));}}).catch(()=>showToast('Erro','error'));}
+
+// ===== CONFIGURAÇÕES DE CATEGORIAS =====
+function renderConfiguracoes(el){
+  const cats=state.cats;
+  const catKeys=sortedCatKeys(cats);
+  el.innerHTML=`
+    <div class="page-header"><div><h2>Configurações</h2><p>Gerencie categorias e subcategorias</p></div>
+      <button class="btn btn-primary" onclick="salvarCategorias()">💾 Salvar categorias</button>
+    </div>
+    <div class="section">
+      <div class="section-header"><h3>Categorias e Subcategorias</h3>
+        <button class="btn btn-secondary btn-sm" onclick="addCategoria()">+ Nova categoria</button>
+      </div>
+      <div class="section-body" style="padding:0" id="cats-body">
+        ${renderCatsBody()}
+      </div>
+    </div>`;
+}
+
+function renderCatsBody(){
+  const cats=state.cats;
+  const catKeys=sortedCatKeys(cats);
+  return catKeys.map(cat=>`
+    <div style="border-bottom:1px solid var(--border);padding:12px 16px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <div style="width:8px;height:8px;border-radius:50%;background:${catColor(cat)};flex-shrink:0"></div>
+        <input type="text" value="${cat}" style="font-weight:600;font-size:13px;width:180px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:var(--text);padding:4px 8px"
+          onchange="renomearCategoria('${cat.replace(/'/g,"\\'")}',this.value)">
+        <button class="btn-icon" style="color:var(--red)" onclick="removerCategoria('${cat.replace(/'/g,"\\'")}')">🗑️</button>
+        <button class="btn btn-secondary btn-sm" onclick="addSubcategoria('${cat.replace(/'/g,"\\'")}')">+ Sub</button>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;padding-left:18px">
+        ${(cats[cat]||[]).map((sub,i)=>`
+          <div style="display:flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:3px 6px">
+            <input type="text" value="${sub}" style="font-size:12px;width:${Math.max(60,sub.length*8)}px;background:transparent;border:none;color:var(--text);outline:none"
+              onchange="renomearSub('${cat.replace(/'/g,"\\'")}',${i},this.value)">
+            <button style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:0 2px" onclick="removerSub('${cat.replace(/'/g,"\\'")}',${i})">✕</button>
+          </div>`).join('')}
+      </div>
+    </div>`).join('');
+}
+
+function addCategoria(){
+  const nome=prompt('Nome da nova categoria:');
+  if(!nome||!nome.trim())return;
+  if(state.cats[nome.trim()]){showToast('Categoria já existe','error');return;}
+  state.cats[nome.trim()]=[];
+  document.getElementById('cats-body').innerHTML=renderCatsBody();
+}
+
+function removerCategoria(cat){
+  if(!confirm(\`Remover a categoria "\${cat}" e todas as suas subcategorias?\`))return;
+  delete state.cats[cat];
+  document.getElementById('cats-body').innerHTML=renderCatsBody();
+}
+
+function renomearCategoria(catAntiga,catNova){
+  catNova=catNova.trim();
+  if(!catNova||catNova===catAntiga)return;
+  if(state.cats[catNova]){showToast('Já existe uma categoria com esse nome','error');return;}
+  const subs=state.cats[catAntiga];
+  delete state.cats[catAntiga];
+  state.cats[catNova]=subs;
+  document.getElementById('cats-body').innerHTML=renderCatsBody();
+}
+
+function addSubcategoria(cat){
+  const nome=prompt(\`Nova subcategoria em "\${cat}":\`);
+  if(!nome||!nome.trim())return;
+  if(!state.cats[cat])state.cats[cat]=[];
+  if(state.cats[cat].includes(nome.trim())){showToast('Subcategoria já existe','error');return;}
+  state.cats[cat].push(nome.trim());
+  document.getElementById('cats-body').innerHTML=renderCatsBody();
+}
+
+function removerSub(cat,idx){
+  state.cats[cat].splice(idx,1);
+  document.getElementById('cats-body').innerHTML=renderCatsBody();
+}
+
+function renomearSub(cat,idx,novoNome){
+  novoNome=novoNome.trim();
+  if(!novoNome)return;
+  state.cats[cat][idx]=novoNome;
+}
+
+function salvarCategorias(){
+  apiPost('salvarConfiguracoes',{categorias:JSON.stringify(state.cats)})
+    .then(()=>showToast('Categorias salvas!','success'))
+    .catch(()=>showToast('Erro ao salvar','error'));
+}
+
 function showToast(msg,type){const t=document.getElementById('toast');t.textContent=msg;t.className=`toast show ${type}`;setTimeout(()=>t.className='toast',3000);}
 
 </script>
