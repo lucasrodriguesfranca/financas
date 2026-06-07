@@ -1033,16 +1033,11 @@ function badgeSugestao(score,count){
 // ===== IMPORTAR =====
 function renderImportar(el){
   el.innerHTML='<div class="page-header"><div><h2>Importar Movimentações</h2></div></div>'
-    +'<div class="section"><div class="section-header"><h3>Formato do arquivo</h3></div><div class="section-body">'
-    +'<div style="display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap">'
-    +'<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px"><input type="radio" name="imp-formato" value="el" checked onchange="impAtualizarFormato()"> <strong>Planilha Espaço Luz</strong> <span style="color:var(--muted);font-size:11px">(Data | Descrição | Valor | Método | Bia/EL | Conta)</span></label>'
-    +'<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px"><input type="radio" name="imp-formato" value="gen" onchange="impAtualizarFormato()"> <strong>CSV/XLSX genérico</strong> <span style="color:var(--muted);font-size:11px">(Data | Descrição | Valor)</span></label>'
-    +'</div>'
-    +'<div id="imp-opts-gen" style="display:none;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px">'
-    +'<div class="form-group"><label>Origem padrão</label><select id="imp-origem-gen"><option value="Empresa">Empresa</option><option value="Bia">Bia</option></select></div>'
-    +'<div class="form-group"><label>Forma Pgto padrão</label><select id="imp-pgto-gen"><option>Crédito</option><option>Pix</option><option>Dinheiro</option><option>Débito</option></select></div>'
-    +'</div>'
+    +'<div class="section"><div class="section-header"><h3>Upload do arquivo</h3></div><div class="section-body">'
+    +'<p style="color:var(--muted);font-size:13px;margin-bottom:16px">O formato é detectado automaticamente. Planilha Espaço Luz (6 colunas com Bia/EL) ou CSV/XLSX genérico (fatura de cartão).</p>'
     +'<div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">'
+    +'<div class="form-group"><label>Forma Pgto padrão <span style="color:var(--muted);font-size:10px;text-transform:none;letter-spacing:0">(usado no formato genérico)</span></label>'
+    +'<select id="imp-pgto-gen"><option>Crédito</option><option>Pix</option><option>Dinheiro</option><option>Débito</option></select></div>'
     +'<div class="form-group"><label>Arquivo CSV/XLSX</label><input type="file" id="imp-file" accept=".csv,.txt,.xlsx,.xls" style="color:var(--muted)"></div>'
     +'<button class="btn btn-primary" onclick="processarArquivoEL()">Processar</button>'
     +'</div>'
@@ -1051,11 +1046,7 @@ function renderImportar(el){
     +'<div id="imp-resultado"></div>';
 }
 
-function impAtualizarFormato(){
-  const formato=document.querySelector('input[name="imp-formato"]:checked')?.value||'el';
-  const optsGen=document.getElementById('imp-opts-gen');
-  if(optsGen)optsGen.style.display=formato==='gen'?'flex':'none';
-}
+function impAtualizarFormato(){}
 
 // ===== PARSER PLANILHA ESPAÇO LUZ =====
 // Colunas: A=Data(serial) B=Descrição C=Valor D=Método E=Bia/EL F=Conta
@@ -1098,8 +1089,17 @@ function normalizarOrigem(conta){
   return 'Empresa';
 }
 
-function parseRowsEL(raw,isXlsx){
-  const formato=document.querySelector('input[name="imp-formato"]:checked')?.value||'el';
+function detectarFormatoEL(raw){
+  // Detecta pelo conteúdo: se alguma linha tem espaço luz ou bia na col E -> formato EL
+  const linhas=raw.slice(0,15).filter(r=>r&&r.length>=5);
+  for(const row of linhas){
+    const colE=String(row[4]||'').toLowerCase();
+    if(colE.includes('espa')||colE==='bia')return 'el';
+  }
+  return 'gen';
+}
+function parseRowsEL(raw){
+  const formato=detectarFormatoEL(raw);
   if(formato==='el')return parseRowsEspacoLuz(raw);
   return parseRowsGenerico(raw);
 }
@@ -1140,7 +1140,7 @@ function parseRowsEspacoLuz(raw){
 function parseRowsGenerico(raw){
   const hasHeader=raw[0]&&typeof raw[0][0]==='string'&&isNaN(parseFloat(raw[0][0]));
   const dataRows=hasHeader?raw.slice(1):raw;
-  const origem=document.getElementById('imp-origem-gen')?.value||'Empresa';
+  const origem='Empresa';
   const pgtoDefault=document.getElementById('imp-pgto-gen')?.value||'Crédito';
   const result=[];
   dataRows.forEach(row=>{
@@ -1174,7 +1174,7 @@ function processarArquivoEL(){
         const workbook=XLSX.read(e.target.result,{type:'array',raw:true});
         const sheet=workbook.Sheets[workbook.SheetNames[0]];
         const raw=XLSX.utils.sheet_to_json(sheet,{header:1,raw:true});
-        const rows=parseRowsEL(raw,true);
+        const rows=parseRowsEL(raw);
         if(!rows.length){showToast('Nenhum lançamento encontrado (verifique se há linhas do Espaço Luz)','error');return;}
         window._impRows=rows;
         renderImportarListaEL(rows);
@@ -1189,7 +1189,7 @@ function processarArquivoEL(){
         const lines=text.split('\n').map(l=>l.trim()).filter(l=>l);
         const sep=lines[0].includes(';')?';':',';
         const raw=lines.map(l=>parseCsvLineEL(l,sep));
-        const rows=parseRowsEL(raw,false);
+        const rows=parseRowsEL(raw);
         if(!rows.length){showToast('Nenhum lançamento encontrado','error');return;}
         window._impRows=rows;
         renderImportarListaEL(rows);
