@@ -656,7 +656,7 @@ function bulkDelete(){const checked=[...document.querySelectorAll('.mov-check:ch
 function exportarMovsFiltradas(){const filtered=getMovFiltradas();const headers=['Data','Categoria','Sub Categoria','Descrição','Valor','Forma de Pagamento','À Vista / Parcelado','Mês/Ano','Receita/Despesa'];const rows=[headers.join(',')];filtered.forEach(m=>rows.push(headers.map(h=>`"${(m[h]||'').toString().replace(/"/g,'""')}"`).join(',')));const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\uFEFF'+rows.join('\n')],{type:'text/csv;charset=utf-8;'}));a.download=`movimentacoes_casa_${new Date().toISOString().split('T')[0]}.csv`;a.click();showToast('Exportado!','success');}
 
 // ===== ANÁLISE =====
-if(!state.analiseFilters)state.analiseFilters={cat:'',sub:''};
+if(!state.analiseFilters)state.analiseFilters={cat:'',sub:'',fp:''};
 function renderAnalise(el){
   const anos=[...new Set(state.movs.map(m=>m['Mês/Ano']?.substring(0,4)).filter(Boolean))].sort();
   const ano=state.filters.ano;const mesAtual=state.filters.mes;
@@ -676,10 +676,11 @@ function renderAnalise(el){
   const allCats=[...new Set([...Object.keys(catAt),...Object.keys(catAnt)])].sort();
   const af=state.analiseFilters;
   let movsAt=filtMovs.filter(m=>m['Mês/Ano']===kAt&&m['Receita/Despesa']==='Despesa');
-  if(af.cat)movsAt=movsAt.filter(m=>m.Categoria===af.cat);if(af.sub)movsAt=movsAt.filter(m=>m['Sub Categoria']===af.sub);
+  if(af.cat)movsAt=movsAt.filter(m=>m.Categoria===af.cat);if(af.sub)movsAt=movsAt.filter(m=>m['Sub Categoria']===af.sub);if(af.fp)movsAt=movsAt.filter(m=>m['Forma de Pagamento']===af.fp);
   movsAt=[...movsAt].sort((a,b)=>b.Data.localeCompare(a.Data));
   const subOptsAt=af.cat?[...new Set(filtMovs.filter(m=>m['Mês/Ano']===kAt&&m.Categoria===af.cat).map(m=>m['Sub Categoria']).filter(Boolean))]:[];
   const catOptsAt=[...new Set(filtMovs.filter(m=>m['Mês/Ano']===kAt&&m['Receita/Despesa']==='Despesa').map(m=>m.Categoria))];
+  const fpOpts=[...new Set(filtMovs.filter(m=>m['Mês/Ano']===kAt&&m['Receita/Despesa']==='Despesa').map(m=>m['Forma de Pagamento']).filter(Boolean))].sort();
 
   el.innerHTML=`
     <div class="page-header"><div><h2>Análise</h2></div>
@@ -720,7 +721,7 @@ function renderAnalise(el){
         <div class="section-header"><h3>Comparativo — ${meses[mesAtual-1]} vs ${meses[mesAnt-1]}</h3></div>
         <div class="section-body" style="padding:0">
           <div style="display:grid;grid-template-columns:1fr 80px 80px 70px;padding:6px 12px;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border)"><div>Categoria</div><div style="text-align:right">Atual</div><div style="text-align:right">Anterior</div><div style="text-align:right">Δ</div></div>
-          ${allCats.map(cat=>{const at=catAt[cat]||0,ant=catAnt[cat]||0,delta=at-ant;const pct=ant>0?` (${((delta/ant)*100).toFixed(0)}%)`:'';return`<div style="display:grid;grid-template-columns:1fr 80px 80px 70px;padding:6px 12px;border-bottom:1px solid rgba(46,46,56,.4);font-size:12px;cursor:pointer" onclick="state.analiseFilters.cat='${cat}';state.analiseFilters.sub='';renderAnalise(document.getElementById('main-content'))" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''"><div style="color:${catColor(cat)}">${cat}</div><div class="td-mono" style="text-align:right">${fmt(at)}</div><div class="td-mono" style="text-align:right;color:var(--muted)">${fmt(ant)}</div><div class="delta ${delta>0?'up':delta<0?'down':'neutral'}" style="text-align:right">${delta>0?'+':''}${fmtShort(delta)}${pct}</div></div>`;}).join('')}
+          ${allCats.map(cat=>{const at=catAt[cat]||0,ant=catAnt[cat]||0,delta=at-ant;const pct=ant>0?` (${((delta/ant)*100).toFixed(0)}%)`:'';return`<div style="display:grid;grid-template-columns:1fr 80px 80px 70px;padding:6px 12px;border-bottom:1px solid rgba(46,46,56,.4);font-size:12px;cursor:pointer" onclick="state.analiseFilters.cat='${cat}';state.analiseFilters.sub='';state.analiseFilters.fp='';renderAnalise(document.getElementById('main-content'))" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''"><div style="color:${catColor(cat)}">${cat}</div><div class="td-mono" style="text-align:right">${fmt(at)}</div><div class="td-mono" style="text-align:right;color:var(--muted)">${fmt(ant)}</div><div class="delta ${delta>0?'up':delta<0?'down':'neutral'}" style="text-align:right">${delta>0?'+':''}${fmtShort(delta)}${pct}</div></div>`;}).join('')}
         </div>
       </div>
       <div class="section" style="margin-bottom:0">
@@ -728,6 +729,7 @@ function renderAnalise(el){
           <h3>Lançamentos de ${meses[mesAtual-1]}/${ano}</h3>
           <div style="display:flex;gap:8px;align-items:center">
             <select onchange="state.analiseFilters.cat=this.value;state.analiseFilters.sub='';renderAnalise(document.getElementById('main-content'))" style="width:120px;font-size:11px;padding:4px 8px"><option value="">Todas cats</option>${catOptsAt.map(c=>`<option value="${c}" ${c===af.cat?'selected':''}>${c}</option>`).join('')}</select>
+            <select onchange="state.analiseFilters.fp=this.value;renderAnalise(document.getElementById('main-content'))" style="width:120px;font-size:11px;padding:4px 8px"><option value="">Todas formas</option>${fpOpts.map(fp=>`<option value="${fp}" ${fp===af.fp?'selected':''}>${fp}</option>`).join('')}</select>
             <select onchange="state.analiseFilters.sub=this.value;renderAnalise(document.getElementById('main-content'))" style="width:120px;font-size:11px;padding:4px 8px"><option value="">Todas subs</option>${subOptsAt.map(s=>`<option value="${s}" ${s===af.sub?'selected':''}>${s}</option>`).join('')}</select>
             <button class="btn btn-secondary btn-sm" onclick="exportarAnaliseMes()">⬇</button>
           </div>
