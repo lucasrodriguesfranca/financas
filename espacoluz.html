@@ -1104,6 +1104,14 @@ function parseRowsEL(raw){
   return parseRowsGenerico(raw);
 }
 
+function findDuplicateEL(data,valor){
+  return state.movs.find(m=>{
+    if(m.Data!==data)return false;
+    if(Math.abs(m.Valor-Math.abs(valor))>0.02)return false;
+    return true;
+  })||null;
+}
+
 function parseRowsEspacoLuz(raw){
   // Detecta header: primeira linha tem texto nas colunas esperadas
   const hasHeader=raw[0]&&typeof raw[0][0]==='string'&&isNaN(parseFloat(raw[0][0]));
@@ -1126,12 +1134,15 @@ function parseRowsEspacoLuz(raw){
     const origem=normalizarOrigem(row[5]);
     // Sugestão de categoria por histórico
     const sug=sugerirCategoria(desc);
+    const dup=findDuplicateEL(data,valor);
     result.push({
       data,desc,valor,tipo,pgto,origem,
       cat:sug?sug.cat:'',
       sub:sug?sug.sub:'',
       sug:sug,
-      incluir:true
+      isDuplicate:!!dup,
+      duplicateRef:dup,
+      incluir:!dup
     });
   });
   return result;
@@ -1152,12 +1163,15 @@ function parseRowsGenerico(raw){
     const valor=normalizarValor(row[2]);
     if(!valor)return;
     const sug=sugerirCategoria(desc);
+    const dup2=findDuplicateEL(data,valor);
     result.push({
       data,desc,valor,tipo:'Despesa',pgto:pgtoDefault,origem,
       cat:sug?sug.cat:'',
       sub:sug?sug.sub:'',
       sug:sug,
-      incluir:true
+      isDuplicate:!!dup2,
+      duplicateRef:dup2,
+      incluir:!dup2
     });
   });
   return result;
@@ -1216,11 +1230,14 @@ function renderImportarListaEL(rows){
   const allCats=sortedCatKeys(state.cats);
   const catsDespesa=allCats.filter(c=>c!=='Dividendo');
   const origens=['Empresa','Bia'];
-  const sugeridos=rows.filter(r=>r.sug).length;
-  const semCat=rows.filter(r=>!r.cat).length;
+  const sugeridos=rows.filter(r=>r.sug&&!r.isDuplicate).length;
+  const semCat=rows.filter(r=>!r.cat&&!r.isDuplicate).length;
+  const duplicados=rows.filter(r=>r.isDuplicate).length;
 
-  el.innerHTML='<div class="section"><div class="section-header">'
-    +'<h3>'+rows.length+' lançamentos — <span style="color:var(--green)">'+sugeridos+' com sugestão</span>'+(semCat>0?' · <span style="color:var(--yellow)">'+semCat+' sem categoria</span>':'')+'</h3>'
+  el.innerHTML='<div class="section">'
+    +(duplicados>0?'<div style="padding:10px 16px;background:rgba(245,197,66,.07);border-bottom:1px solid rgba(245,197,66,.25);font-size:12px;color:var(--yellow)">⚠ '+duplicados+' prováveis duplicatas detectadas (mesma data e valor já existente) — desmarcadas automaticamente. Você pode marcar novamente para importar mesmo assim.</div>':'')
+    +'<div class="section-header">'
+    +'<h3>'+rows.length+' lançamentos — <span style="color:var(--green)">'+sugeridos+' com sugestão</span>'+(duplicados>0?' · <span style="color:var(--yellow)">'+duplicados+' duplicatas</span>':'')+(semCat>0?' · <span style="color:var(--muted)">'+semCat+' sem categoria</span>':'')+'</h3>'
     +'<div style="display:flex;gap:8px">'
     +'<button class="btn btn-secondary btn-sm" onclick="impToggleTodos(true)">Marcar todos</button>'
     +'<button class="btn btn-secondary btn-sm" onclick="impToggleTodos(false)">Desmarcar todos</button>'
@@ -1240,12 +1257,15 @@ function renderImportarListaEL(rows){
       const corTipo=r.tipo==='Receita'?'var(--green)':'var(--red)';
       const subOpts=(r.cat&&state.cats[r.cat]?(state.cats[r.cat]).map(s=>'<option value="'+s+'"'+(s===r.sub?' selected':'')+'>'+s+'</option>').join(''):'');
       const catOpts=(r.tipo==='Receita'?['Receita']:catsDespesa).map(c=>'<option value="'+c+'"'+(c===r.cat?' selected':'')+'>'+c+'</option>').join('');
-      return '<tr style="'+(r.sug?'':'background:rgba(245,197,66,.03)')+'">'
+      const rowBg=r.isDuplicate?'background:rgba(245,197,66,.06);opacity:.75':(!r.sug?'background:rgba(245,197,66,.03)':'');
+      return '<tr style="'+rowBg+'">'
         +'<td><input type="checkbox"'+(r.incluir?' checked':'')+' onchange="window._impRows['+i+'].incluir=this.checked"></td>'
         +'<td class="td-mono" style="font-size:11px;white-space:nowrap">'+r.data+'</td>'
         +'<td style="max-width:200px;font-size:12px">'
           +'<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+r.desc+'">'+r.desc+'</div>'
-          +(r.sug?'<div style="margin-top:2px">'+badgeSugestao(r.sug.score,r.sug.count)+'</div>':'<div style="font-size:9px;color:var(--yellow);margin-top:2px">sem histórico</div>')
+          +(r.isDuplicate
+            ?'<div style="font-size:9px;color:var(--yellow);margin-top:2px">⚠ duplicata — já existe: '+(r.duplicateRef?r.duplicateRef.Desc||r.duplicateRef.Categoria:'')+'</div>'
+            :(r.sug?'<div style="margin-top:2px">'+badgeSugestao(r.sug.score,r.sug.count)+'</div>':'<div style="font-size:9px;color:var(--muted);margin-top:2px">sem histórico</div>'))
         +'</td>'
         +'<td class="td-mono" style="text-align:right;color:'+corTipo+';white-space:nowrap">'+fmt(r.valor)+'</td>'
         +'<td><select style="font-size:11px;padding:3px 6px" onchange="window._impRows['+i+'].tipo=this.value;renderImportarListaEL(window._impRows)">'
