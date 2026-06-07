@@ -982,18 +982,185 @@ function salvarRendimento(mesKey){
   }).catch(()=>showToast('Erro ao salvar','error'));
 }
 
+// ===== SUGESTÃO DE CATEGORIA POR HISTÓRICO =====
+// Normaliza string para comparação: lowercase, sem acentos, só alfanumérico
+function normStr(s){
+  return (s||'').toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^a-z0-9 ]/g,' ')
+    .replace(/\s+/g,' ').trim();
+}
+// Retorna {cat, sub, score} ou null
+function sugerirCategoria(desc){
+  if(!desc||!state.movs.length)return null;
+  const q=normStr(desc);
+  if(!q)return null;
+  // Contagem por (cat+sub) para matches
+  const freq={};
+  state.movs.forEach(m=>{
+    if(!m.Categoria||!m.Desc)return;
+    const h=normStr(m.Desc);
+    let score=0;
+    // match exato
+    if(h===q)score=3;
+    // substring bidirecional
+    else if(h.includes(q)||q.includes(h))score=2;
+    else{
+      // bigrama sobre palavras
+      const qW=q.split(' ').filter(Boolean);
+      const hW=h.split(' ').filter(Boolean);
+      const common=qW.filter(w=>hW.some(hw=>hw.includes(w)||w.includes(hw)));
+      if(common.length>0&&common.length>=Math.min(qW.length,hW.length)*0.5)score=1;
+    }
+    if(score>0){
+      const k=m.Categoria+'|||'+(m.Sub||'');
+      if(!freq[k])freq[k]={cat:m.Categoria,sub:m.Sub||'',count:0,score:0};
+      freq[k].count++;
+      freq[k].score=Math.max(freq[k].score,score);
+    }
+  });
+  const best=Object.values(freq).sort((a,b)=>b.score-a.score||b.count-a.count)[0];
+  if(!best)return null;
+  return{cat:best.cat,sub:best.sub,count:best.count,score:best.score};
+}
+// Badge visual de confiança
+function badgeSugestao(score,count){
+  if(score===3)return '<span style="font-size:9px;background:rgba(61,214,140,.15);color:var(--green);padding:1px 5px;border-radius:3px;white-space:nowrap">✓ exato ('+count+'x)</span>';
+  if(score===2)return '<span style="font-size:9px;background:rgba(124,106,247,.15);color:var(--accent2);padding:1px 5px;border-radius:3px;white-space:nowrap">~ parcial ('+count+'x)</span>';
+  return '<span style="font-size:9px;background:rgba(136,136,152,.15);color:var(--muted);padding:1px 5px;border-radius:3px;white-space:nowrap">? aprox. ('+count+'x)</span>';
+}
+
 // ===== IMPORTAR =====
 function renderImportar(el){
-  el.innerHTML='<div class="page-header"><div><h2>Importar Movimentações</h2><p>CSV ou XLSX com lançamentos históricos</p></div></div>'
-    +'<div class="section"><div class="section-header"><h3>Upload do arquivo</h3></div><div class="section-body">'
-    +'<p style="color:var(--muted);font-size:13px;margin-bottom:14px">Estrutura esperada: <code style="background:var(--surface2);padding:2px 6px;border-radius:4px">Data | Descrição | Valor</code> ou similar. O sistema tenta detectar as colunas automaticamente.</p>'
+  el.innerHTML='<div class="page-header"><div><h2>Importar Movimentações</h2></div></div>'
+    +'<div class="section"><div class="section-header"><h3>Formato do arquivo</h3></div><div class="section-body">'
+    +'<div style="display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap">'
+    +'<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px"><input type="radio" name="imp-formato" value="el" checked onchange="impAtualizarFormato()"> <strong>Planilha Espaço Luz</strong> <span style="color:var(--muted);font-size:11px">(Data | Descrição | Valor | Método | Bia/EL | Conta)</span></label>'
+    +'<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px"><input type="radio" name="imp-formato" value="gen" onchange="impAtualizarFormato()"> <strong>CSV/XLSX genérico</strong> <span style="color:var(--muted);font-size:11px">(Data | Descrição | Valor)</span></label>'
+    +'</div>'
+    +'<div id="imp-opts-gen" style="display:none;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px">'
+    +'<div class="form-group"><label>Origem padrão</label><select id="imp-origem-gen"><option value="Empresa">Empresa</option><option value="Bia">Bia</option></select></div>'
+    +'<div class="form-group"><label>Forma Pgto padrão</label><select id="imp-pgto-gen"><option>Crédito</option><option>Pix</option><option>Dinheiro</option><option>Débito</option></select></div>'
+    +'</div>'
     +'<div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">'
-    +'<div class="form-group"><label>Origem padrão</label><select id="imp-origem"><option value="Empresa">Empresa</option><option value="Bia">Bia</option></select></div>'
-    +'<div class="form-group"><label>Forma Pgto padrão</label><select id="imp-pgto"><option>Crédito</option><option>Pix</option><option>Dinheiro</option><option>Débito</option></select></div>'
     +'<div class="form-group"><label>Arquivo CSV/XLSX</label><input type="file" id="imp-file" accept=".csv,.txt,.xlsx,.xls" style="color:var(--muted)"></div>'
     +'<button class="btn btn-primary" onclick="processarArquivoEL()">Processar</button>'
-    +'</div></div></div>'
+    +'</div>'
+    +'<p style="color:var(--muted);font-size:12px;margin-top:10px">Categoria e subcategoria são sugeridas automaticamente com base no histórico de lançamentos.</p>'
+    +'</div></div>'
     +'<div id="imp-resultado"></div>';
+}
+
+function impAtualizarFormato(){
+  const formato=document.querySelector('input[name="imp-formato"]:checked')?.value||'el';
+  const optsGen=document.getElementById('imp-opts-gen');
+  if(optsGen)optsGen.style.display=formato==='gen'?'flex':'none';
+}
+
+// ===== PARSER PLANILHA ESPAÇO LUZ =====
+// Colunas: A=Data(serial) B=Descrição C=Valor D=Método E=Bia/EL F=Conta
+function serialParaData(serial){
+  // Serial Excel: dias desde 1900-01-01 (com bug de 1900 como bissexto)
+  const d=new Date((serial-25569)*86400000);
+  const y=d.getUTCFullYear();
+  const m=String(d.getUTCMonth()+1).padStart(2,'0');
+  const day=String(d.getUTCDate()).padStart(2,'0');
+  return y+'-'+m+'-'+day;
+}
+function normalizarData(cell){
+  if(cell===null||cell===undefined||cell==='')return null;
+  if(typeof cell==='number'&&cell>40000&&cell<60000)return serialParaData(cell);
+  const s=String(cell).trim();
+  if(/^\d{4}-\d{2}-\d{2}/.test(s))return s.substring(0,10);
+  const m1=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if(m1){const y=m1[3].length===2?'20'+m1[3]:m1[3];return y+'-'+m1[2].padStart(2,'0')+'-'+m1[1].padStart(2,'0');}
+  return null;
+}
+function normalizarValor(cell){
+  if(cell===null||cell===undefined)return 0;
+  if(typeof cell==='number')return Math.abs(cell);
+  let s=String(cell).replace(/[R$\s]/g,'').trim();
+  if(s.includes(','))return Math.abs(parseFloat(s.replace(/\./g,'').replace(',','.'))||0);
+  return Math.abs(parseFloat(s)||0);
+}
+function normalizarPgto(metodo){
+  const m=(metodo||'').toLowerCase().trim();
+  if(m==='receita')return '';
+  if(m==='pix')return 'Pix';
+  if(m.includes('cart'))return 'Crédito';
+  if(m==='dinheiro')return 'Dinheiro';
+  if(m==='debito'||m==='débito')return 'Débito';
+  return 'Outro';
+}
+function normalizarOrigem(conta){
+  const c=(conta||'').toLowerCase().trim();
+  if(c==='pessoal')return 'Bia';
+  return 'Empresa';
+}
+
+function parseRowsEL(raw,isXlsx){
+  const formato=document.querySelector('input[name="imp-formato"]:checked')?.value||'el';
+  if(formato==='el')return parseRowsEspacoLuz(raw);
+  return parseRowsGenerico(raw);
+}
+
+function parseRowsEspacoLuz(raw){
+  // Detecta header: primeira linha tem texto nas colunas esperadas
+  const hasHeader=raw[0]&&typeof raw[0][0]==='string'&&isNaN(parseFloat(raw[0][0]));
+  const dataRows=hasHeader?raw.slice(1):raw;
+  const result=[];
+  dataRows.forEach(row=>{
+    if(!row||row.length<3)return;
+    // Col E = Bia/EL — filtrar só Espaço Luz
+    const entidade=String(row[4]||'').trim().toLowerCase();
+    if(entidade&&!entidade.includes('espa'))return; // ignora Bia e linhas sem entidade
+    const data=normalizarData(row[0]);
+    if(!data)return;
+    const desc=String(row[1]||'').trim();
+    if(!desc)return;
+    const valor=normalizarValor(row[2]);
+    if(!valor)return;
+    const metodo=String(row[3]||'').trim();
+    const tipo=metodo.toLowerCase()==='receita'?'Receita':'Despesa';
+    const pgto=normalizarPgto(metodo);
+    const origem=normalizarOrigem(row[5]);
+    // Sugestão de categoria por histórico
+    const sug=sugerirCategoria(desc);
+    result.push({
+      data,desc,valor,tipo,pgto,origem,
+      cat:sug?sug.cat:'',
+      sub:sug?sug.sub:'',
+      sug:sug,
+      incluir:true
+    });
+  });
+  return result;
+}
+
+function parseRowsGenerico(raw){
+  const hasHeader=raw[0]&&typeof raw[0][0]==='string'&&isNaN(parseFloat(raw[0][0]));
+  const dataRows=hasHeader?raw.slice(1):raw;
+  const origem=document.getElementById('imp-origem-gen')?.value||'Empresa';
+  const pgtoDefault=document.getElementById('imp-pgto-gen')?.value||'Crédito';
+  const result=[];
+  dataRows.forEach(row=>{
+    if(!row||row.length<2)return;
+    const data=normalizarData(row[0]);
+    if(!data)return;
+    const desc=String(row[1]||'').trim();
+    if(!desc)return;
+    const valor=normalizarValor(row[2]);
+    if(!valor)return;
+    const sug=sugerirCategoria(desc);
+    result.push({
+      data,desc,valor,tipo:'Despesa',pgto:pgtoDefault,origem,
+      cat:sug?sug.cat:'',
+      sub:sug?sug.sub:'',
+      sug:sug,
+      incluir:true
+    });
+  });
+  return result;
 }
 
 function processarArquivoEL(){
@@ -1008,10 +1175,10 @@ function processarArquivoEL(){
         const sheet=workbook.Sheets[workbook.SheetNames[0]];
         const raw=XLSX.utils.sheet_to_json(sheet,{header:1,raw:true});
         const rows=parseRowsEL(raw,true);
-        if(!rows.length){showToast('Nenhum lançamento encontrado','error');return;}
+        if(!rows.length){showToast('Nenhum lançamento encontrado (verifique se há linhas do Espaço Luz)','error');return;}
         window._impRows=rows;
         renderImportarListaEL(rows);
-      }catch(err){showToast('Erro XLSX: '+err.message,'error');}
+      }catch(err){showToast('Erro XLSX: '+err.message,'error');console.error(err);}
     };
     reader.readAsArrayBuffer(file);
   } else {
@@ -1021,7 +1188,7 @@ function processarArquivoEL(){
         const text=e.target.result;
         const lines=text.split('\n').map(l=>l.trim()).filter(l=>l);
         const sep=lines[0].includes(';')?';':',';
-        const raw=lines.map(l=>l.split(sep).map(c=>c.replace(/^"|"$/g,'').trim()));
+        const raw=lines.map(l=>parseCsvLineEL(l,sep));
         const rows=parseRowsEL(raw,false);
         if(!rows.length){showToast('Nenhum lançamento encontrado','error');return;}
         window._impRows=rows;
@@ -1032,60 +1199,92 @@ function processarArquivoEL(){
   }
 }
 
-function parseRowsEL(raw,isXlsx){
-  const hasHeader=raw[0]&&(typeof raw[0][0]==='string')&&isNaN(parseFloat(raw[0][0]));
-  const dataRows=hasHeader?raw.slice(1):raw;
-  const origem=document.getElementById('imp-origem')?.value||'Empresa';
-  const pgto=document.getElementById('imp-pgto')?.value||'Crédito';
-  return dataRows.map(row=>{
-    if(!row||row.length<2)return null;
-    let data=String(row[0]||'').trim();
-    // normaliza data
-    if(data.match(/^\d{2}\/\d{2}\/\d{4}$/)){const[d,m,y]=data.split('/');data=y+'-'+m+'-'+d;}
-    else if(data.match(/^\d{2}\/\d{2}\/\d{2}$/)){const[d,m,y]=data.split('/');data='20'+y+'-'+m+'-'+d;}
-    if(!data.match(/^\d{4}-\d{2}-\d{2}$/))return null;
-    const desc=String(row[1]||'').trim();
-    let valorRaw=String(row[2]||'').replace(/[R$\s]/g,'').trim();
-    let valor=0;
-    if(valorRaw.includes(',')){valor=parseFloat(valorRaw.replace(/\./g,'').replace(',','.'))||0;}
-    else{valor=parseFloat(valorRaw)||0;}
-    if(!valor||valor<0)return null;
-    return{data,desc,valor,cat:'',sub:'',origem,pgto,incluir:true};
-  }).filter(Boolean);
+function parseCsvLineEL(line,sep){
+  const result=[];let cur='';let inQ=false;
+  for(let i=0;i<line.length;i++){
+    const c=line[i];
+    if(c==='"'){inQ=!inQ;}
+    else if(c===sep&&!inQ){result.push(cur.trim());cur='';}
+    else{cur+=c;}
+  }
+  result.push(cur.trim());
+  return result;
 }
 
 function renderImportarListaEL(rows){
   const el=document.getElementById('imp-resultado');
-  const cats=sortedCatKeys(state.cats).filter(c=>c!=='Receita'&&c!=='Investimento'&&c!=='Dividendo');
+  const allCats=sortedCatKeys(state.cats);
+  const catsDespesa=allCats.filter(c=>c!=='Dividendo');
   const origens=['Empresa','Bia'];
+  const sugeridos=rows.filter(r=>r.sug).length;
+  const semCat=rows.filter(r=>!r.cat).length;
 
-  el.innerHTML='<div class="section"><div class="section-header"><h3>'+rows.length+' lançamentos encontrados</h3>'
-    +'<button class="btn btn-primary btn-sm" onclick="confirmarImportacaoEL()">Salvar todos com categoria</button></div>'
-    +'<div style="overflow-x:auto"><table>'
-    +'<thead><tr><th style="width:36px"><input type="checkbox" checked onchange="rows.forEach(r=>r.incluir=this.checked);renderImportarListaEL(window._impRows)"></th><th>Data</th><th>Descrição</th><th style="text-align:right">Valor</th><th>Origem</th><th>Categoria</th><th>Sub</th><th>Pgto</th></tr></thead>'
+  el.innerHTML='<div class="section"><div class="section-header">'
+    +'<h3>'+rows.length+' lançamentos — <span style="color:var(--green)">'+sugeridos+' com sugestão</span>'+(semCat>0?' · <span style="color:var(--yellow)">'+semCat+' sem categoria</span>':'')+'</h3>'
+    +'<div style="display:flex;gap:8px">'
+    +'<button class="btn btn-secondary btn-sm" onclick="impToggleTodos(true)">Marcar todos</button>'
+    +'<button class="btn btn-secondary btn-sm" onclick="impToggleTodos(false)">Desmarcar todos</button>'
+    +'<button class="btn btn-primary btn-sm" onclick="confirmarImportacaoEL()">Salvar marcados ✓</button>'
+    +'</div></div>'
+    +'<div style="overflow-x:auto"><table style="min-width:900px">'
+    +'<thead><tr>'
+    +'<th style="width:32px"></th>'
+    +'<th>Data</th><th>Descrição</th>'
+    +'<th style="text-align:right">Valor</th>'
+    +'<th>Tipo</th><th>Origem</th>'
+    +'<th>Categoria <span style="color:var(--accent2);font-weight:400;font-size:10px">sugerida do histórico</span></th>'
+    +'<th>Sub</th><th>Pgto</th>'
+    +'</tr></thead>'
     +'<tbody>'
-    +rows.map((r,i)=>'<tr>'
-      +'<td><input type="checkbox"'+(r.incluir?' checked':'')+' onchange="window._impRows['+i+'].incluir=this.checked"></td>'
-      +'<td class="td-mono" style="font-size:11px">'+r.data+'</td>'
-      +'<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px" title="'+r.desc+'">'+r.desc+'</td>'
-      +'<td class="td-mono" style="text-align:right;color:var(--red)">'+fmt(r.valor)+'</td>'
-      +'<td><select style="font-size:11px;padding:3px 6px" onchange="window._impRows['+i+'].origem=this.value">'+origens.map(o=>'<option'+(o===r.origem?' selected':'')+'>'+o+'</option>').join('')+'</select></td>'
-      +'<td><select style="font-size:11px;padding:3px 6px" onchange="window._impRows['+i+'].cat=this.value;window._impRows['+i+'].sub=\'\'">'
-        +'<option value="">—</option>'+cats.map(c=>'<option value="'+c+'"'+(c===r.cat?' selected':'')+'>'+c+'</option>').join('')
-      +'</select></td>'
-      +'<td><select style="font-size:11px;padding:3px 6px" onchange="window._impRows['+i+'].sub=this.value">'
-        +'<option value="">—</option>'+(r.cat?(state.cats[r.cat]||[]).map(s=>'<option value="'+s+'"'+(s===r.sub?' selected':'')+'>'+s+'</option>').join(''):'')+''
-      +'</select></td>'
-      +'<td><select style="font-size:11px;padding:3px 6px" onchange="window._impRows['+i+'].pgto=this.value">'+['Crédito','Pix','Dinheiro','Débito'].map(p=>'<option'+(p===r.pgto?' selected':'')+'>'+p+'</option>').join('')+'</select></td>'
-      +'</tr>').join('')
+    +rows.map((r,i)=>{
+      const corTipo=r.tipo==='Receita'?'var(--green)':'var(--red)';
+      const subOpts=(r.cat&&state.cats[r.cat]?(state.cats[r.cat]).map(s=>'<option value="'+s+'"'+(s===r.sub?' selected':'')+'>'+s+'</option>').join(''):'');
+      const catOpts=(r.tipo==='Receita'?['Receita']:catsDespesa).map(c=>'<option value="'+c+'"'+(c===r.cat?' selected':'')+'>'+c+'</option>').join('');
+      return '<tr style="'+(r.sug?'':'background:rgba(245,197,66,.03)')+'">'
+        +'<td><input type="checkbox"'+(r.incluir?' checked':'')+' onchange="window._impRows['+i+'].incluir=this.checked"></td>'
+        +'<td class="td-mono" style="font-size:11px;white-space:nowrap">'+r.data+'</td>'
+        +'<td style="max-width:200px;font-size:12px">'
+          +'<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+r.desc+'">'+r.desc+'</div>'
+          +(r.sug?'<div style="margin-top:2px">'+badgeSugestao(r.sug.score,r.sug.count)+'</div>':'<div style="font-size:9px;color:var(--yellow);margin-top:2px">sem histórico</div>')
+        +'</td>'
+        +'<td class="td-mono" style="text-align:right;color:'+corTipo+';white-space:nowrap">'+fmt(r.valor)+'</td>'
+        +'<td><select style="font-size:11px;padding:3px 6px" onchange="window._impRows['+i+'].tipo=this.value;renderImportarListaEL(window._impRows)">'
+          +'<option value="Receita"'+(r.tipo==='Receita'?' selected':'')+'>Receita</option>'
+          +'<option value="Despesa"'+(r.tipo==='Despesa'?' selected':'')+'>Despesa</option>'
+          +'<option value="Investimento"'+(r.tipo==='Investimento'?' selected':'')+'>Investimento</option>'
+          +'<option value="Dividendo"'+(r.tipo==='Dividendo'?' selected':'')+'>Dividendo</option>'
+        +'</select></td>'
+        +'<td><select style="font-size:11px;padding:3px 6px" onchange="window._impRows['+i+'].origem=this.value">'+origens.map(o=>'<option'+(o===r.origem?' selected':'')+'>'+o+'</option>').join('')+'</select></td>'
+        +'<td><select style="font-size:11px;padding:3px 6px;min-width:130px" onchange="window._impRows['+i+'].cat=this.value;window._impRows['+i+'].sub=\'\';impAtualizarSub('+i+',this.value)">'
+          +'<option value="">— escolha —</option>'+catOpts
+        +'</select></td>'
+        +'<td><select id="imp-sub-'+i+'" style="font-size:11px;padding:3px 6px;min-width:110px" onchange="window._impRows['+i+'].sub=this.value">'
+          +'<option value="">—</option>'+subOpts
+        +'</select></td>'
+        +'<td><select style="font-size:11px;padding:3px 6px" onchange="window._impRows['+i+'].pgto=this.value">'+['Crédito','Pix','Dinheiro','Débito',''].map(p=>'<option value="'+p+'"'+(p===r.pgto?' selected':'')+'>'+(p||'N/A')+'</option>').join('')+'</select></td>'
+        +'</tr>';
+    }).join('')
     +'</tbody></table></div></div>';
+}
+
+function impAtualizarSub(i,cat){
+  const sel=document.getElementById('imp-sub-'+i);
+  if(!sel)return;
+  const subs=state.cats[cat]||[];
+  sel.innerHTML='<option value="">—</option>'+subs.map(s=>'<option value="'+s+'">'+s+'</option>').join('');
+  window._impRows[i].sub='';
+}
+
+function impToggleTodos(v){
+  (window._impRows||[]).forEach(r=>r.incluir=v);
+  renderImportarListaEL(window._impRows);
 }
 
 function confirmarImportacaoEL(){
   const aprovados=(window._impRows||[]).filter(r=>r.incluir&&r.cat);
   const sem=(window._impRows||[]).filter(r=>r.incluir&&!r.cat);
   if(sem.length>0&&!confirm(sem.length+' sem categoria serão ignorados. Continuar com '+aprovados.length+'?'))return;
-  if(!aprovados.length){showToast('Nenhum lançamento com categoria','error');return;}
+  if(!aprovados.length){showToast('Nenhum lançamento com categoria selecionado','error');return;}
   const lancamentos=aprovados.map(r=>({
     Origem:r.origem,Data:r.data,Categoria:r.cat,'Sub Categoria':r.sub,
     Descrição:r.desc,Valor:r.valor,'Forma de Pgto':r.pgto,
@@ -1095,7 +1294,7 @@ function confirmarImportacaoEL(){
   apiPost('salvarMultiplosLancamentos',lancamentos).then(res=>{
     if(res.success){
       lancamentos.forEach(l=>{
-        state.movs.push({Origem:l.Origem,Data:l.Data,Categoria:l.Categoria,Sub:l['Sub Categoria'],Desc:l.Descrição,Valor:safeNum(l.Valor),FormaPgto:l['Forma de Pgto'],AVistaParc:'À vista',MesAno:l['Mês/Ano'],Tipo:l.Categoria==='Receita'?'Receita':'Despesa'});
+        state.movs.push({Origem:l.Origem,Data:l.Data,Categoria:l.Categoria,Sub:l['Sub Categoria'],Desc:l.Descrição,Valor:safeNum(l.Valor),FormaPgto:l['Forma de Pgto'],AVistaParc:'À vista',MesAno:l['Mês/Ano'],Tipo:l.Categoria==='Receita'?'Receita':l.Categoria==='Investimento'?'Investimento':l.Categoria==='Dividendo'?'Dividendo':'Despesa'});
       });
       showToast(lancamentos.length+' importados!','success');
       setTimeout(()=>showPage('movimentacoes'),800);
