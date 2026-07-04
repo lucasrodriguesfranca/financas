@@ -1845,17 +1845,28 @@ function impSalvar(){
     }
   });
 
-  showToast(`Salvando ${lancamentos.length} lançamentos...`,'success');
+  const total = lancamentos.length;
+  const BATCH = 20;
+  const lotes = [];
+  for(let i=0;i<total;i+=BATCH) lotes.push(lancamentos.slice(i,i+BATCH));
+  showToast(`Salvando ${total} lançamentos em ${lotes.length} lote(s)...`,'success');
 
-  apiPost('salvarMultiplosLancamentos', lancamentos)
-    .then(res=>{
-      if(res.success){
-        state.movs.push(...lancamentos);
-        showToast(`${lancamentos.length} lançamentos importados!`,'success');
-        setTimeout(()=>showPage('movimentacoes'),800);
+  (async ()=>{
+    try {
+      for(let i=0;i<lotes.length;i++){
+        showToast(`Salvando lote ${i+1}/${lotes.length}...`,'success');
+        const res = await apiPost('salvarMultiplosLancamentos', lotes[i]);
+        if(!res.success) throw new Error('Erro no lote '+(i+1));
+        state.movs.push(...lotes[i]);
       }
-    })
-    .catch(()=>showToast('Erro ao salvar','error'));
+      showToast(`${total} lançamentos importados!`,'success');
+      state.importRows=[];
+      renderImportar(document.getElementById('main-content'));
+      setTimeout(()=>showPage('movimentacoes'),800);
+    } catch(err) {
+      showToast('Erro ao salvar: '+(err.message||''),'error');
+    }
+  })();
 }
 function editarMov(idx){
   const m=state.movs[idx];
