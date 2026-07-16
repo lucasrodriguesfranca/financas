@@ -157,6 +157,9 @@ tbody td{padding:7px 10px;}
     <div class="nav-item" onclick="showPage('importar')" id="nav-importar">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Importar Fatura
     </div>
+    <div class="nav-item" onclick="showPage('configuracoes')" id="nav-configuracoes">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Configurações
+    </div>
   </div>
   <div class="main" id="main-content">
     <div class="loading">
@@ -247,7 +250,6 @@ let state={
   showReembolso:false,
   analiseShowReembolso:false,
   ajusteSaldo:parseFloat(localStorage.getItem('ajusteSaldo')||'0'),
-  saldoApp:parseFloat(localStorage.getItem('saldoApp')||'0'),
   contasFixas:[],
   // contasFixasPagas e faturasPagas: carregadas do Sheets no init, não do localStorage
   contasFixasPagas:{},
@@ -341,7 +343,6 @@ function toggleContaFixaPaga(nomeConta, mesKey){
 function salvarConfiguracoes(){
   const cfg={
     ajusteSaldo: String(state.ajusteSaldo),
-    saldoApp: String(state.saldoApp),
     contasFixas: JSON.stringify(state.contasFixas),
     faturasPagas: JSON.stringify(state.faturasPagas),
     contasFixasPagas: JSON.stringify(state.contasFixasPagas)
@@ -412,7 +413,6 @@ function iniciarApp(){
     try{
       if(cfg){
         if(cfg.ajusteSaldo!==undefined) state.ajusteSaldo=parseFloat(cfg.ajusteSaldo)||0;
-        if(cfg.saldoApp!==undefined) state.saldoApp=parseFloat(cfg.saldoApp)||0;
         if(cfg.contasFixas) state.contasFixas=JSON.parse(cfg.contasFixas);
         if(cfg.faturasPagas) state.faturasPagas=JSON.parse(cfg.faturasPagas);
         if(cfg.contasFixasPagas) state.contasFixasPagas=JSON.parse(cfg.contasFixasPagas);
@@ -451,6 +451,7 @@ function showPage(page){
   else if(page==='movimentacoes')renderMovimentacoes(main);
   else if(page==='analise')renderAnalise(main);
   else if(page==='importar')renderImportar(main);
+  else if(page==='configuracoes')renderConfiguracoes(main);
 }
 
 // ===== PERIOD BAR =====
@@ -487,13 +488,15 @@ function renderDashboard(el){
   const cartoes=['Cartão Itaú 3418','Cartão Itaú 2854'];
   const mesAntKey=getMesAnteriorKey();
 
-  // Desconta fatura do mês anterior apenas se marcada como paga
+  // Desconta faturas pagas de TODOS os meses passados (não só o mês anterior ao filtro)
+  const todaySaldoMes=todaySaldo.substring(0,7)+'-01';
+  const mesesComMovs=[...new Set(state.movs.map(m=>m['Mês/Ano']).filter(Boolean))].sort();
+  const mesesPassados=mesesComMovs.filter(m=>m>='2026-01-01'&&m<todaySaldoMes);
   const faturasPagasDesconto=cartoes.reduce((total,cartao)=>{
-    if(!isFaturaPaga(cartao, mesAntKey)) return total;
-    const valorFatura=state.movs
-      .filter(m=>m['Mês/Ano']===mesAntKey&&m['Receita/Despesa']==='Despesa'&&m['Forma de Pagamento']===cartao)
-      .reduce((s,m)=>s+safeNum(m.Valor),0);
-    return total+valorFatura;
+    return total+mesesPassados.reduce((t,mes)=>{
+      if(!isFaturaPaga(cartao,mes))return t;
+      return t+state.movs.filter(m=>m['Mês/Ano']===mes&&m['Receita/Despesa']==='Despesa'&&m['Forma de Pagamento']===cartao).reduce((s,m)=>s+safeNum(m.Valor),0);
+    },0);
   },0);
 
   const saldoConta=allMBase.filter(m=>m['Receita/Despesa']==='Receita').reduce((s,m)=>s+safeNum(m.Valor),0)
@@ -842,8 +845,6 @@ function openModal(title,html){document.getElementById('modal-title').textConten
 function closeModal(){document.getElementById('modal-overlay').classList.remove('open');}
 function openAjusteSaldo(){openModal('Ajuste de Saldo em Conta',`<p style="color:var(--muted);font-size:13px;margin-bottom:16px">Positivo adiciona, negativo desconta do saldo calculado pelas movimentações.</p><div class="form-group" style="margin-bottom:18px"><label>Valor do ajuste</label><input type="number" id="ajuste-val" value="${state.ajusteSaldo}" step="0.01" style="width:200px"></div><div class="form-actions"><button class="btn btn-primary" onclick="salvarAjusteSaldo()">Salvar</button><button class="btn btn-secondary" onclick="closeModal()">Cancelar</button></div>`);}
 function salvarAjusteSaldo(){state.ajusteSaldo=parseFloat(document.getElementById('ajuste-val').value)||0;salvarConfiguracoes();closeModal();refreshDashboard();showToast('Saldo ajustado!','success');}
-function openSaldoApp(){openModal('Saldo App Compartilhado',`<p style="color:var(--muted);font-size:13px;margin-bottom:16px">Positivo = Thaíza te deve. Negativo = você deve.</p><div class="form-group" style="margin-bottom:18px"><label>Saldo atual do app</label><input type="number" id="app-val" value="${state.saldoApp}" step="0.01" style="width:200px"></div><div class="form-actions"><button class="btn btn-primary" onclick="salvarSaldoApp()">Salvar</button><button class="btn btn-secondary" onclick="closeModal()">Cancelar</button></div>`);}
-function salvarSaldoApp(){state.saldoApp=parseFloat(document.getElementById('app-val').value)||0;salvarConfiguracoes();closeModal();refreshDashboard();showToast('Atualizado!','success');}
 function openContasFixas(){openModal('Contas Fixas',`<table style="width:100%;margin-bottom:14px"><thead><tr><th>Nome</th><th>Valor</th><th>Dia Venc.</th><th></th></tr></thead><tbody>${state.contasFixas.map((cf,i)=>`<tr><td><input type="text" value="${cf.nome}" onchange="state.contasFixas[${i}].nome=this.value" style="width:140px"></td><td><input type="number" value="${cf.valor}" onchange="state.contasFixas[${i}].valor=+this.value" style="width:80px"></td><td><input type="number" value="${cf.diaVenc}" onchange="state.contasFixas[${i}].diaVenc=+this.value" style="width:55px"></td><td><button class="btn-icon" onclick="state.contasFixas.splice(${i},1);openContasFixas()">🗑️</button></td></tr>`).join('')}</tbody></table><div class="form-actions"><button class="btn btn-secondary btn-sm" onclick="state.contasFixas.push({nome:'Nova',valor:0,diaVenc:10});openContasFixas()">+ Add</button><button class="btn btn-primary" onclick="salvarContasFixas()">Salvar</button><button class="btn btn-secondary" onclick="closeModal()">Cancelar</button></div>`);}
 function salvarContasFixas(){salvarConfiguracoes();closeModal();refreshDashboard();showToast('Salvo!','success');}
 
@@ -1843,17 +1844,27 @@ function impSalvar(){
     }
   });
 
-  showToast(`Salvando ${lancamentos.length} lançamentos...`,'success');
-
-  apiPost('salvarMultiplosLancamentos', lancamentos)
-    .then(res=>{
-      if(res.success){
-        state.movs.push(...lancamentos);
-        showToast(`${lancamentos.length} lançamentos importados!`,'success');
-        setTimeout(()=>showPage('movimentacoes'),800);
+  const total=lancamentos.length;
+  const BATCH=10;
+  const lotes=[];
+  for(let i=0;i<total;i+=BATCH) lotes.push(lancamentos.slice(i,i+BATCH));
+  showToast(`Salvando ${total} lançamentos em ${lotes.length} lote(s)...`,'success');
+  (async()=>{
+    try{
+      for(let i=0;i<lotes.length;i++){
+        showToast(`Salvando lote ${i+1}/${lotes.length}...`,'success');
+        const res=await apiPost('salvarMultiplosLancamentos',lotes[i]);
+        if(!res.success) throw new Error('Erro no lote '+(i+1));
+        state.movs.push(...lotes[i]);
       }
-    })
-    .catch(()=>showToast('Erro ao salvar','error'));
+      showToast(`${total} lançamentos importados!`,'success');
+      state.importRows=[];
+      renderImportar(document.getElementById('main-content'));
+      setTimeout(()=>showPage('movimentacoes'),800);
+    }catch(err){
+      showToast('Erro ao salvar: '+(err.message||''),'error');
+    }
+  })();
 }
 function editarMov(idx){
   const m=state.movs[idx];
@@ -1920,6 +1931,59 @@ function exportarDados(){
   filtered.forEach(m=>rows.push(headers.map(h=>`"${(m[h]||'').toString().replace(/"/g,'""')}"`).join(',')));
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\uFEFF'+rows.join('\n')],{type:'text/csv;charset=utf-8;'}));a.download=`financas_${new Date().toISOString().split('T')[0]}.csv`;a.click();showToast('CSV exportado!','success');
 }
+
+// ===== CONFIGURAÇÕES DE CATEGORIAS =====
+function renderConfiguracoes(el){
+  el.innerHTML = '<div class="page-header"><div><h2>Configurações</h2><p>Gerencie categorias e subcategorias</p></div>'
+    + '<button class="btn btn-primary" onclick="salvarCategorias()">💾 Salvar categorias</button></div>'
+    + '<div class="section"><div class="section-header"><h3>Categorias e Subcategorias</h3>'
+    + '<button class="btn btn-secondary btn-sm" onclick="addCategoria()">+ Nova categoria</button></div>'
+    + '<div class="section-body" style="padding:0" id="cats-body">' + renderCatsBody() + '</div></div>';
+}
+
+function renderCatsBody(){
+  const cats=state.cats;
+  const catKeys=sortedCatKeys(cats);
+  return catKeys.map(function(cat,ci){
+    const color=catColor(cat);
+    const subs=(cats[cat]||[]).map(function(sub,si){
+      const w=Math.max(60,sub.length*8);
+      return '<div style="display:flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:3px 6px">'
+        +'<input type="text" value="'+sub.replace(/"/g,'&quot;')+' data-ci="'+ci+'" data-si="'+si+'"'
+        +' style="font-size:12px;width:'+w+'px;background:transparent;border:none;color:var(--text);outline:none"'
+        +' onchange="cfgRenameSub(this)">'
+        +'<button style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:0 2px"'
+        +' data-ci="'+ci+'" data-si="'+si+'" onclick="cfgRemoveSub(this)">✕</button>'
+        +'</div>';
+    }).join('');
+    return '<div style="border-bottom:1px solid var(--border);padding:12px 16px">'
+      +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">'
+      +'<div style="width:8px;height:8px;border-radius:50%;background:'+color+';flex-shrink:0"></div>'
+      +'<input type="text" value="'+cat.replace(/"/g,'&quot;')+' data-ci="'+ci+'"'
+      +' style="font-weight:600;font-size:13px;width:180px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:var(--text);padding:4px 8px"'
+      +' onchange="cfgRenameCat(this)">'
+      +'<button class="btn-icon" style="color:var(--red)" data-ci="'+ci+'" onclick="cfgRemoveCat(this)">🗑️</button>'
+      +'<button class="btn btn-secondary btn-sm" data-ci="'+ci+'" onclick="cfgAddSub(this)">+ Sub</button>'
+      +'</div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:6px;padding-left:18px">'+subs+'</div>'
+      +'</div>';
+  }).join('');
+}
+
+function cfgGetKeys(){return sortedCatKeys(state.cats);}
+function cfgRenameCat(el){const keys=cfgGetKeys();const old=keys[+el.dataset.ci];const novo=el.value.trim();if(!novo||novo===old)return;if(state.cats[novo]){showToast('Já existe','error');el.value=old;return;}const subs=state.cats[old];delete state.cats[old];state.cats[novo]=subs;document.getElementById('cats-body').innerHTML=renderCatsBody();}
+function cfgRemoveCat(el){const keys=cfgGetKeys();const cat=keys[+el.dataset.ci];if(!confirm('Remover "'+cat+'" e todas as subcategorias?'))return;delete state.cats[cat];document.getElementById('cats-body').innerHTML=renderCatsBody();}
+function cfgAddSub(el){const keys=cfgGetKeys();const cat=keys[+el.dataset.ci];const nome=prompt('Nova subcategoria em "'+cat+'":');if(!nome||!nome.trim())return;if(!state.cats[cat])state.cats[cat]=[];state.cats[cat].push(nome.trim());document.getElementById('cats-body').innerHTML=renderCatsBody();}
+function cfgRenameSub(el){const keys=cfgGetKeys();const cat=keys[+el.dataset.ci];state.cats[cat][+el.dataset.si]=el.value.trim();}
+function cfgRemoveSub(el){const keys=cfgGetKeys();const cat=keys[+el.dataset.ci];state.cats[cat].splice(+el.dataset.si,1);document.getElementById('cats-body').innerHTML=renderCatsBody();}
+function addCategoria(){const nome=prompt('Nome da nova categoria:');if(!nome||!nome.trim())return;if(state.cats[nome.trim()]){showToast('Categoria já existe','error');return;}state.cats[nome.trim()]=[];document.getElementById('cats-body').innerHTML=renderCatsBody();}
+function removerCategoria(cat){if(!confirm('Remover "'+cat+'"?'))return;delete state.cats[cat];document.getElementById('cats-body').innerHTML=renderCatsBody();}
+function renomearCategoria(catAntiga,catNova){catNova=catNova.trim();if(!catNova||catNova===catAntiga)return;if(state.cats[catNova]){showToast('Já existe','error');return;}const subs=state.cats[catAntiga];delete state.cats[catAntiga];state.cats[catNova]=subs;document.getElementById('cats-body').innerHTML=renderCatsBody();}
+function addSubcategoria(cat){const nome=prompt('Nova subcategoria em "'+cat+'":');if(!nome||!nome.trim())return;if(!state.cats[cat])state.cats[cat]=[];if(state.cats[cat].includes(nome.trim())){showToast('Já existe','error');return;}state.cats[cat].push(nome.trim());document.getElementById('cats-body').innerHTML=renderCatsBody();}
+function removerSub(cat,idx){state.cats[cat].splice(idx,1);document.getElementById('cats-body').innerHTML=renderCatsBody();}
+function renomearSub(cat,idx,novoNome){novoNome=novoNome.trim();if(!novoNome)return;state.cats[cat][idx]=novoNome;}
+function salvarCategorias(){apiPost('salvarConfiguracoes',{categorias:JSON.stringify(state.cats)}).then(function(){showToast('Categorias salvas!','success');}).catch(function(){showToast('Erro ao salvar','error');});}
+
 function showToast(msg,type){const t=document.getElementById('toast');t.textContent=msg;t.className=`toast show ${type}`;setTimeout(()=>t.className='toast',3000);}
 
 // ===== IMPORTAR XLSX — PARSER UNIVERSAL =====

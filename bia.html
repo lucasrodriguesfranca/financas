@@ -492,13 +492,15 @@ function renderDashboard(el){
   const cartoes=['Cartão Itaú'];
   const mesAntKey=getMesAnteriorDoFiltroKey();
 
-  // Desconta fatura do mês anterior apenas se marcada como paga
+  // Desconta faturas pagas de TODOS os meses passados (não só o mês anterior ao filtro)
+  const todaySaldoMes=todaySaldo.substring(0,7)+'-01';
+  const mesesComMovs=[...new Set(state.movs.map(m=>m['Mês/Ano']).filter(Boolean))].sort();
+  const mesesPassados=mesesComMovs.filter(m=>m>='2026-01-01'&&m<todaySaldoMes);
   const faturasPagasDesconto=cartoes.reduce((total,cartao)=>{
-    if(!isFaturaPaga(cartao, mesAntKey)) return total;
-    const valorFatura=state.movs
-      .filter(m=>m['Mês/Ano']===mesAntKey&&m['Receita/Despesa']==='Despesa'&&m['Forma de Pagamento']===cartao)
-      .reduce((s,m)=>s+safeNum(m.Valor),0);
-    return total+valorFatura;
+    return total+mesesPassados.reduce((t,mes)=>{
+      if(!isFaturaPaga(cartao,mes))return t;
+      return t+state.movs.filter(m=>m['Mês/Ano']===mes&&m['Receita/Despesa']==='Despesa'&&m['Forma de Pagamento']===cartao).reduce((s,m)=>s+safeNum(m.Valor),0);
+    },0);
   },0);
 
   const saldoConta=allMBase.filter(m=>m['Receita/Despesa']==='Receita').reduce((s,m)=>s+safeNum(m.Valor),0)

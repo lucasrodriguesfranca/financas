@@ -250,13 +250,7 @@ let state={
   showReembolso:false,
   analiseShowReembolso:false,
   ajusteSaldo:parseFloat(localStorage.getItem('ajusteSaldo')||'0'),
-  saldoApp:parseFloat(localStorage.getItem('saldoApp')||'0'),
-  contasFixas:JSON.parse(localStorage.getItem('contasFixas')||'null')||[
-    {nome:'Espaço Luz',valor:259.00,diaVenc:5,busca:'espaço luz'},
-    {nome:'Gympass',valor:189.90,diaVenc:5,busca:'gympass'},
-    {nome:'Acerto Thaíza',valor:225.00,diaVenc:31,busca:'thaíza'},
-    {nome:'Sócio Cruzeiro',valor:12.00,diaVenc:15,busca:'cruzeiro'}
-  ],
+  contasFixas:[],
   // contasFixasPagas e faturasPagas: carregadas do Sheets no init, não do localStorage
   contasFixasPagas:{},
   faturasPagas:{},
@@ -349,7 +343,6 @@ function toggleContaFixaPaga(nomeConta, mesKey){
 function salvarConfiguracoes(){
   const cfg={
     ajusteSaldo: String(state.ajusteSaldo),
-    saldoApp: String(state.saldoApp),
     contasFixas: JSON.stringify(state.contasFixas),
     faturasPagas: JSON.stringify(state.faturasPagas),
     contasFixasPagas: JSON.stringify(state.contasFixasPagas)
@@ -375,7 +368,7 @@ function getSaldoProjetado(saldoConta){
       .reduce((s,m)=>s+safeNum(m.Valor),0);
   },0);
 
-  return saldoConta - parcelasFuturas - faturaEmAberto + state.saldoApp;
+  return saldoConta - parcelasFuturas - faturaEmAberto;
 }
 
 // ===== INIT =====
@@ -420,7 +413,6 @@ function iniciarApp(){
     try{
       if(cfg){
         if(cfg.ajusteSaldo!==undefined) state.ajusteSaldo=parseFloat(cfg.ajusteSaldo)||0;
-        if(cfg.saldoApp!==undefined) state.saldoApp=parseFloat(cfg.saldoApp)||0;
         if(cfg.contasFixas) state.contasFixas=JSON.parse(cfg.contasFixas);
         if(cfg.faturasPagas) state.faturasPagas=JSON.parse(cfg.faturasPagas);
         if(cfg.contasFixasPagas) state.contasFixasPagas=JSON.parse(cfg.contasFixasPagas);
@@ -484,13 +476,15 @@ function renderDashboard(el){
   const cartoes=['Cartão Itaú','Cartão Virtual Itaú'];
   const mesAntKey=getMesAnteriorDoFiltroKey();
 
-  // Desconta fatura do mês anterior apenas se marcada como paga
+  // Desconta faturas pagas de TODOS os meses passados (não só o mês anterior ao filtro)
+  const todaySaldoMes=todaySaldo.substring(0,7)+'-01';
+  const mesesComMovs=[...new Set(state.movs.map(m=>m['Mês/Ano']).filter(Boolean))].sort();
+  const mesesPassados=mesesComMovs.filter(m=>m>='2026-01-01'&&m<todaySaldoMes);
   const faturasPagasDesconto=cartoes.reduce((total,cartao)=>{
-    if(!isFaturaPaga(cartao, mesAntKey)) return total;
-    const valorFatura=state.movs
-      .filter(m=>m['Mês/Ano']===mesAntKey&&m['Receita/Despesa']==='Despesa'&&m['Forma de Pagamento']===cartao)
-      .reduce((s,m)=>s+safeNum(m.Valor),0);
-    return total+valorFatura;
+    return total+mesesPassados.reduce((t,mes)=>{
+      if(!isFaturaPaga(cartao,mes))return t;
+      return t+state.movs.filter(m=>m['Mês/Ano']===mes&&m['Receita/Despesa']==='Despesa'&&m['Forma de Pagamento']===cartao).reduce((s,m)=>s+safeNum(m.Valor),0);
+    },0);
   },0);
 
   const saldoConta=allMBase.filter(m=>m['Receita/Despesa']==='Receita').reduce((s,m)=>s+safeNum(m.Valor),0)
@@ -544,7 +538,7 @@ function renderDashboard(el){
     <div class="page-header"><div><h2>Dashboard</h2><p>Última atualização: <strong style="color:var(--text)">${getLastDate()}</strong></p></div></div>
     ${renderPeriodBar()}
 
-    <div class="cards-grid" style="grid-template-columns:repeat(7,1fr)">
+    <div class="cards-grid" style="grid-template-columns:repeat(6,1fr)">
       <div class="card"><div class="card-label">Receita</div><div class="card-value green">${fmt(receita)}</div><div class="card-sub">${filtered.filter(m=>m['Receita/Despesa']==='Receita').length} lanç.</div></div>
       <div class="card"><div class="card-label">Despesas</div><div class="card-value red">${fmt(despesa)}</div><div class="card-sub">${filtered.filter(m=>m['Receita/Despesa']==='Despesa').length} lanç.</div></div>
       <div class="card"><div class="card-label">Investido</div><div class="card-value accent">${fmt(investimento)}</div></div>
@@ -554,15 +548,10 @@ function renderDashboard(el){
         <div class="card-value ${saldoConta>=0?'green':'red'}">${fmt(saldoConta)}</div>
         <div class="card-sub">Ajuste: ${fmt(state.ajusteSaldo)}</div>
       </div>
-      <div class="card" style="cursor:pointer" onclick="openSaldoApp()">
-        <div class="card-label">App Thaíza ✏️</div>
-        <div class="card-value ${state.saldoApp>=0?'green':'red'}">${state.saldoApp>=0?'+':''}${fmt(state.saldoApp)}</div>
-        <div class="card-sub">${state.saldoApp>=0?'Ela te deve':'Você deve'}</div>
-      </div>
       <div class="card" style="border-color:${saldoProj>=0?'rgba(61,214,140,.2)':'rgba(249,106,106,.2)'}">
         <div class="card-label">Saldo Projetado</div>
         <div class="card-value ${saldoProj>=0?'green':'red'}">${fmt(saldoProj)}</div>
-        <div class="card-sub">− faturas − fixas + app</div>
+        <div class="card-sub">− faturas − parcelas</div>
       </div>
     </div>
 
@@ -843,8 +832,6 @@ function openModal(title,html){document.getElementById('modal-title').textConten
 function closeModal(){document.getElementById('modal-overlay').classList.remove('open');}
 function openAjusteSaldo(){openModal('Ajuste de Saldo em Conta',`<p style="color:var(--muted);font-size:13px;margin-bottom:16px">Positivo adiciona, negativo desconta do saldo calculado pelas movimentações.</p><div class="form-group" style="margin-bottom:18px"><label>Valor do ajuste</label><input type="number" id="ajuste-val" value="${state.ajusteSaldo}" step="0.01" style="width:200px"></div><div class="form-actions"><button class="btn btn-primary" onclick="salvarAjusteSaldo()">Salvar</button><button class="btn btn-secondary" onclick="closeModal()">Cancelar</button></div>`);}
 function salvarAjusteSaldo(){state.ajusteSaldo=parseFloat(document.getElementById('ajuste-val').value)||0;salvarConfiguracoes();closeModal();refreshDashboard();showToast('Saldo ajustado!','success');}
-function openSaldoApp(){openModal('Saldo App Compartilhado',`<p style="color:var(--muted);font-size:13px;margin-bottom:16px">Positivo = Thaíza te deve. Negativo = você deve.</p><div class="form-group" style="margin-bottom:18px"><label>Saldo atual do app</label><input type="number" id="app-val" value="${state.saldoApp}" step="0.01" style="width:200px"></div><div class="form-actions"><button class="btn btn-primary" onclick="salvarSaldoApp()">Salvar</button><button class="btn btn-secondary" onclick="closeModal()">Cancelar</button></div>`);}
-function salvarSaldoApp(){state.saldoApp=parseFloat(document.getElementById('app-val').value)||0;salvarConfiguracoes();closeModal();refreshDashboard();showToast('Atualizado!','success');}
 function moverContaFixa(i,dir){const a=state.contasFixas;const j=i+dir;if(j<0||j>=a.length)return;[a[i],a[j]]=[a[j],a[i]];openContasFixas();}
 function openContasFixas(){openModal('Contas Fixas',`<table style="width:100%;margin-bottom:14px"><thead><tr><th>Nome</th><th>Valor</th><th>Dia Venc.</th><th>Ordem</th><th></th></tr></thead><tbody>${state.contasFixas.map((cf,i)=>`<tr><td><input type="text" value="${cf.nome}" onchange="state.contasFixas[${i}].nome=this.value" style="width:140px"></td><td><input type="number" value="${cf.valor}" onchange="state.contasFixas[${i}].valor=+this.value" style="width:80px"></td><td><input type="number" value="${cf.diaVenc}" onchange="state.contasFixas[${i}].diaVenc=+this.value" style="width:55px"></td><td style="white-space:nowrap"><button class="btn-icon" onclick="moverContaFixa(${i},-1)" ${i===0?'disabled':''}>↑</button><button class="btn-icon" onclick="moverContaFixa(${i},1)" ${i===state.contasFixas.length-1?'disabled':''}>↓</button></td><td><button class="btn-icon" onclick="state.contasFixas.splice(${i},1);openContasFixas()">🗑️</button></td></tr>`).join('')}</tbody></table><div class="form-actions"><button class="btn btn-secondary btn-sm" onclick="state.contasFixas.push({nome:'Nova',valor:0,diaVenc:10});openContasFixas()">+ Add</button><button class="btn btn-primary" onclick="salvarContasFixas()">Salvar</button><button class="btn btn-secondary" onclick="closeModal()">Cancelar</button></div>`);}
 function salvarContasFixas(){salvarConfiguracoes();closeModal();refreshDashboard();showToast('Salvo!','success');}
@@ -1845,17 +1832,27 @@ function impSalvar(){
     }
   });
 
-  showToast(`Salvando ${lancamentos.length} lançamentos...`,'success');
-
-  apiPost('salvarMultiplosLancamentos', lancamentos)
-    .then(res=>{
-      if(res.success){
-        state.movs.push(...lancamentos);
-        showToast(`${lancamentos.length} lançamentos importados!`,'success');
-        setTimeout(()=>showPage('movimentacoes'),800);
+  const total=lancamentos.length;
+  const BATCH=10;
+  const lotes=[];
+  for(let i=0;i<total;i+=BATCH) lotes.push(lancamentos.slice(i,i+BATCH));
+  showToast(`Salvando ${total} lançamentos em ${lotes.length} lote(s)...`,'success');
+  (async()=>{
+    try{
+      for(let i=0;i<lotes.length;i++){
+        showToast(`Salvando lote ${i+1}/${lotes.length}...`,'success');
+        const res=await apiPost('salvarMultiplosLancamentos',lotes[i]);
+        if(!res.success) throw new Error('Erro no lote '+(i+1));
+        state.movs.push(...lotes[i]);
       }
-    })
-    .catch(()=>showToast('Erro ao salvar','error'));
+      showToast(`${total} lançamentos importados!`,'success');
+      state.importRows=[];
+      renderImportar(document.getElementById('main-content'));
+      setTimeout(()=>showPage('movimentacoes'),800);
+    }catch(err){
+      showToast('Erro ao salvar: '+(err.message||''),'error');
+    }
+  })();
 }
 function editarMov(idx){
   const m=state.movs[idx];
